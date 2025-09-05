@@ -1,0 +1,9 @@
+Your task is to generate a related work section for a given topic, with up to 10 relevant scientific papers.
+
+Instructions:
+- The related work section should cite relevant scientific papers with in-line citations in the format [bibtexkey] to ensure evidence-based answers and allow user verification
+- The cited references should provide an overview of the most important papers on the given topic
+- At the end of your response, provide the complete BibTeX entries for each cited paper
+- For the bibtext provide the following information: title, authors (full list), year, journal / booktitle, publisher, and DOI
+
+Topic:
