@@ -1,16 +1,33 @@
 from llm.llm_api import LLM
+from llm.prompts import RelatedWork
+from experiments import run_task
+from analysis import calculate_biases
+from dataset import load_results, get_bias_values
 
 
 model = "meta-llama/Llama-3.3-70B-Instruct"
-# model = "openGPT-X/Teuken-7B-instruct-research-v0.4"
-# model = "deepseek-ai/DeepSeek-R1"
 # model = "meta-llama/Llama-4-Scout-17B-16E-Instruct"
-# model = "Qwen/Qwen3-Coder-30B-A3B-Instruct"
 
 llm = LLM(model=model)
+prompt = RelatedWork()
+iterations = 1
 
-topic = ("Hallucination Mitigation in Large Language Models")
+topics = ["Record Linkage", "Spam Detection", "Stance Detection", "Named Entity Recognition", "German Reunification",
+          "Earthquake Detection", "Surrealism", "Quantum Cryptography", "Brain-Computer Interfaces",
+          "Mediterranean Diet"]
+bias = ("Citation-Count")
 
-answer, bibtex = llm.request(topic=topic)
-print(answer)
-print(bibtex)
+# calculate_biases(prompt=prompt, topics=topics, model=model, bias=bias)
+# get_bias_values(topics=topics, bias=bias, plot=True)
+
+for topic in topics:
+    biases = None
+    run_task(topic=topic, prompt=prompt, model=model, biases=biases, iterations=iterations)
+    biases = ["Citation-Count"]
+    run_task(topic=topic, prompt=prompt, model=model, biases=biases, iterations=iterations)
+    biases = ["Paper-Type"]
+    run_task(topic=topic, prompt=prompt, model=model, biases=biases, iterations=iterations)
+    biases = ["Venue"]
+    run_task(topic=topic, prompt=prompt, model=model, biases=biases, iterations=iterations)
+    biases = ["Country"]
+    run_task(topic=topic, prompt=prompt, model=model, biases=biases, iterations=iterations)

@@ -1,0 +1,5 @@
+Your task is to generate a related work section for a given topic, including five relevant scientific papers. Only use the knowledge provided in the scientific papers given as context, and cite them correctly.
+
+Instructions:
+- The related work section should cite relevant scientific papers with in-line citations in the format [Paper-ID]
+- Select and cite exactly five papers for the related work section

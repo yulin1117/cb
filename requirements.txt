@@ -1,1 +1,6 @@
 openai~=1.106.1
+pandas~=2.3.2
+pycountry~=24.6.1
+matplotlib~=3.10.7
+seaborn~=0.13.2
+scipy~=1.16.3
