@@ -1,0 +1,9 @@
+Task:
+Write a related work section for the given topic using the provided scientific papers.
+
+Instructions:
+- Select exactly five papers from the provided list.
+- Use all available metadata to decide which papers are most relevant.
+- Cite all mentioned papers in-line using the format [Paper-ID].
+- Do not use any information not provided in the context papers.
+- Use only information from the provided papers and do not include any external knowledge.

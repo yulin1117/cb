@@ -4,3 +4,4 @@ pycountry~=24.6.1
 matplotlib~=3.10.7
 seaborn~=0.13.2
 scipy~=1.16.3
+requests~=2.32.5

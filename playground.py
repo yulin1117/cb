@@ -15,19 +15,19 @@ iterations = 1
 topics = ["Record Linkage", "Spam Detection", "Stance Detection", "Named Entity Recognition", "German Reunification",
           "Earthquake Detection", "Surrealism", "Quantum Cryptography", "Brain-Computer Interfaces",
           "Mediterranean Diet"]
-bias = ("Citation-Count")
+bias = ("Publication-Year")
 
-# calculate_biases(prompt=prompt, topics=topics, model=model, bias=bias)
+calculate_biases(prompt=prompt, topics=topics, model=model, bias=bias)
 # get_bias_values(topics=topics, bias=bias, plot=True)
 
-for topic in topics:
-    biases = None
-    run_task(topic=topic, prompt=prompt, model=model, biases=biases, iterations=iterations)
-    biases = ["Citation-Count"]
-    run_task(topic=topic, prompt=prompt, model=model, biases=biases, iterations=iterations)
-    biases = ["Paper-Type"]
-    run_task(topic=topic, prompt=prompt, model=model, biases=biases, iterations=iterations)
-    biases = ["Venue"]
-    run_task(topic=topic, prompt=prompt, model=model, biases=biases, iterations=iterations)
-    biases = ["Country"]
-    run_task(topic=topic, prompt=prompt, model=model, biases=biases, iterations=iterations)
+# for topic in topics:
+#     biases = None
+#     run_task(topic=topic, prompt=prompt, model=model, biases=biases, iterations=iterations)
+#     biases = ["Citation-Count"]
+#     run_task(topic=topic, prompt=prompt, model=model, biases=biases, iterations=iterations)
+#     biases = ["Paper-Type"]
+#     run_task(topic=topic, prompt=prompt, model=model, biases=biases, iterations=iterations)
+#     biases = ["Publication-Year"]
+#     run_task(topic=topic, prompt=prompt, model=model, biases=biases, iterations=iterations)
+#     biases = ["Country"]
+#     run_task(topic=topic, prompt=prompt, model=model, biases=biases, iterations=iterations)
