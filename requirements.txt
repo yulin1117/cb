@@ -1,4 +1,9 @@
-openai~=1.106.1
+umap-learn
+scikit-learn
+numpy
+hdbscan
+sentence-transformers
+openai~=2.8.0
 pandas~=2.3.2
 pycountry~=24.6.1
 matplotlib~=3.10.7
