@@ -215,17 +215,19 @@ def load_topic_title_abstract(topic_url, n=20000):
     return cleaned_papers
 
 
-def cluster_topic(topic_url, n=20000, embedding_model_name="all-mpnet-base-v2", min_cluster_size=10, top_k_keywords=10):
+
+def cluster_topic(topic_url, n=20000, embedding_model_name="all-mpnet-base-v2",
+                  min_cluster_size=10, top_k_keywords=10):
     """
-    Cluster papers from OpenAlex into subtopics, plot clusters and save keywords.
-    Saves results in: out/topics/{Topic-ID}/cluster.png and keywords.txt
+    Cluster papers into subtopics and extract meaningful cluster keywords.
     """
+
     # Extract Topic ID from URL
     topic_id = topic_url.rstrip("/").split("/")[-1]
     save_dir = os.path.join("out", "topics", topic_id)
     os.makedirs(save_dir, exist_ok=True)
 
-    # Step 1: Load cleaned papers
+    # Load cleaned papers
     texts = load_topic_title_abstract(topic_url, n=n)
     if not texts:
         print("No papers loaded.")
@@ -233,15 +235,15 @@ def cluster_topic(topic_url, n=20000, embedding_model_name="all-mpnet-base-v2", 
 
     print(f"Loaded {len(texts)} papers. Computing embeddings...")
 
-    # Step 2: Embed papers
+    # Embed papers
     model = SentenceTransformer(embedding_model_name)
     embeddings = model.encode(texts, show_progress_bar=True, convert_to_numpy=True)
 
-    # Step 3: Cluster with HDBSCAN
+    # Cluster with HDBSCAN
     clusterer = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size, metric='euclidean')
     cluster_labels = clusterer.fit_predict(embeddings)
 
-    # Step 4: Group texts by cluster
+    # Group texts by cluster
     clusters = {}
     for text, label in zip(texts, cluster_labels):
         if label == -1:
@@ -250,23 +252,44 @@ def cluster_topic(topic_url, n=20000, embedding_model_name="all-mpnet-base-v2", 
 
     print(f"Found {len(clusters)} clusters.")
 
-    # Step 5: Extract top keywords per cluster
+    # Extract top keywords per cluster
+    from keybert import KeyBERT
+    kw_model = KeyBERT(model=embedding_model_name)
+
     cluster_keywords = {}
     for label, docs in clusters.items():
-        tfidf = TfidfVectorizer(max_features=1000, stop_words='english')
-        X = tfidf.fit_transform(docs)
-        indices = np.argsort(tfidf.idf_)[::-1][:top_k_keywords]
-        keywords = [tfidf.get_feature_names_out()[i] for i in indices]
-        cluster_keywords[label] = keywords
+        full_text = " ".join(docs)
 
-    # Step 6: Save keywords
+        try:
+            # KeyBERT primary keyword extraction
+            keywords = kw_model.extract_keywords(
+                full_text,
+                keyphrase_ngram_range=(1, 3),
+                stop_words='english',
+                top_n=top_k_keywords
+            )
+            cluster_keywords[label] = [k for k, score in keywords]
+
+        except Exception:
+            tfidf = TfidfVectorizer(
+                max_features=2000,
+                stop_words='english',
+                token_pattern=r"(?u)\b[a-zA-Z][a-zA-Z]+\b"
+            )
+            X = tfidf.fit_transform(docs).toarray()
+            mean_scores = X.mean(axis=0)
+            indices = np.argsort(mean_scores)[::-1][:top_k_keywords]
+            keywords = [tfidf.get_feature_names_out()[i] for i in indices]
+            cluster_keywords[label] = keywords
+
+    # Save keywords
     keywords_path = os.path.join(save_dir, "keywords.txt")
     with open(keywords_path, "w", encoding="utf-8") as f:
         for label, kws in cluster_keywords.items():
             f.write(f"Cluster {label}: {', '.join(kws)}\n")
     print(f"Saved keywords to: {keywords_path}")
 
-    # Step 7: Plot clusters in 2D using UMAP
+    # Plot clusters in 2D using UMAP
     reducer = umap.UMAP(n_neighbors=15, min_dist=0.1, metric='cosine', random_state=42)
     embedding_2d = reducer.fit_transform(embeddings)
 
@@ -274,7 +297,6 @@ def cluster_topic(topic_url, n=20000, embedding_model_name="all-mpnet-base-v2", 
     palette = plt.get_cmap("tab20")
     for label in set(cluster_labels):
         if label == -1:
-            # noise
             color = "lightgray"
             size = 10
         else:
@@ -285,11 +307,7 @@ def cluster_topic(topic_url, n=20000, embedding_model_name="all-mpnet-base-v2", 
                     label=f"Cluster {label}" if label != -1 else "Noise", alpha=0.6)
 
     plt.title(f"Clusters for topic {topic_id}")
-    plt.xlabel("UMAP 1")
-    plt.ylabel("UMAP 2")
-    plt.legend(loc='best', markerscale=1.5, fontsize=8)
-    plt.tight_layout()
-
+    plt.legend(fontsize=8)
     plot_path = os.path.join(save_dir, "cluster.png")
     plt.savefig(plot_path, dpi=300)
     plt.close()
