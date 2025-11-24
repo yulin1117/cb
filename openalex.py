@@ -8,6 +8,7 @@ from sentence_transformers import SentenceTransformer
 import hdbscan
 from sklearn.feature_extraction.text import TfidfVectorizer
 import umap
+from keybert import KeyBERT
 
 
 def get_openalex_topics(cache_file="data/openalex/topics.json"):
@@ -253,7 +254,6 @@ def cluster_topic(topic_url, n=20000, embedding_model_name="all-mpnet-base-v2",
     print(f"Found {len(clusters)} clusters.")
 
     # Extract top keywords per cluster
-    from keybert import KeyBERT
     kw_model = KeyBERT(model=embedding_model_name)
 
     cluster_keywords = {}
