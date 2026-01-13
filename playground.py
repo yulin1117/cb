@@ -33,8 +33,19 @@ bias = ("Publication-Year")
 #     biases = ["Country"]
 #     run_task(topic=topic, prompt=prompt, model=model, biases=biases, iterations=iterations)
 
-oa_topics = get_openalex_topics()
+#oa_topics = get_openalex_topics()
+
 topic_url = "https://openalex.org/T10181"
+print(topic_url)
+cluster_topic(topic_url=topic_url, n=20000)
+
+topic_url = "https://openalex.org/T10764"
+print(topic_url)
+cluster_topic(topic_url=topic_url, n=20000)
+
+topic_url = "https://openalex.org/T12380"
+print(topic_url)
+cluster_topic(topic_url=topic_url, n=20000)
+
 # oa_works = get_works_for_topic(topic_url=topic_url, n=20000)
 # works = load_topic_title_abstract(topic_url=topic_url, n=20000)
-cluster_topic(topic_url=topic_url, n=20000)
