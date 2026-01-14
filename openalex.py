@@ -2,6 +2,7 @@ import os
 import re
 import json
 import requests
+import torch
 import random
 import numpy as np
 import matplotlib.pyplot as plt
@@ -361,9 +362,6 @@ def _merge_clusters_by_centroid_similarity(
     return new_labels
 
 
-# -----------------------------
-# Main: state-of-the-art pipeline
-# -----------------------------
 def cluster_topic(
     topic_url,
     n=20000,
@@ -390,7 +388,6 @@ def cluster_topic(
     # reps for LLM / inspection
     representative_per_cluster=5,
     # embedding model
-    device="cuda",
     embedding_model_name="allenai/specter2_base",
     batch_size=32,
     # merge threshold (only for overcluster-merge)
@@ -404,6 +401,7 @@ def cluster_topic(
     - SPECTER2 embeddings (normalized)
     - clustering: HDBSCAN on UMAP(10D) (recommended) OR KMeans variants
     - topic representation: c-TF-IDF phrase keywords (2-4 grams) + domain stopwords
+      + an internal unigram pass for acronyms/symbols (domain-agnostic)
     - representative docs per cluster for LLM labeling
     - UMAP 2D visualization
 
@@ -412,6 +410,10 @@ def cluster_topic(
       cluster_keywords: {label: [phrases]}
       representatives: {label: [rep_texts]}
     """
+    import numpy as np
+    import re
+    from sklearn.feature_extraction.text import CountVectorizer
+
     # -----------------------------
     # LOAD DATA
     # -----------------------------
@@ -424,23 +426,22 @@ def cluster_topic(
         print("No papers loaded.")
         return None, None, None
 
-    # Normalize text lightly (helps vectorizer + keywording)
     texts = [_normalize_text(t) for t in texts]
-
     print(f"Loaded {len(texts)} papers. Computing embeddings ({embedding_model_name})...")
 
     # -----------------------------
-    # EMBEDDINGS (SPECTER2) + L2 normalize
+    # EMBEDDINGS
     # -----------------------------
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     model = SentenceTransformer(embedding_model_name, device=device)
     embeddings = model.encode(
         texts,
         batch_size=batch_size,
         show_progress_bar=True,
         convert_to_numpy=True,
-        normalize_embeddings=False,  # we'll do it explicitly below
+        normalize_embeddings=False,
     )
-    embeddings = normalize(embeddings)  # L2 normalize -> cosine geometry
+    embeddings = normalize(embeddings)
     print("Embeddings computed. Shape:", embeddings.shape)
 
     # -----------------------------
@@ -452,9 +453,7 @@ def cluster_topic(
         try:
             import hdbscan
         except ImportError as e:
-            raise ImportError(
-                "hdbscan is required for cluster_method='hdbscan'. Install: pip install hdbscan"
-            ) from e
+            raise ImportError("hdbscan is required for cluster_method='hdbscan'. Install: pip install hdbscan") from e
 
         print("UMAP (for clustering) -> HDBSCAN clustering...")
         umap_cluster = umap.UMAP(
@@ -469,7 +468,7 @@ def cluster_topic(
         clusterer = hdbscan.HDBSCAN(
             min_cluster_size=hdb_min_cluster_size,
             min_samples=hdb_min_samples,
-            metric="euclidean",  # UMAP output is euclidean
+            metric="euclidean",
             cluster_selection_method=hdb_selection_method,
         )
         cluster_labels = clusterer.fit_predict(emb_umap)
@@ -477,9 +476,6 @@ def cluster_topic(
         n_clusters = len(set(cluster_labels)) - (1 if -1 in cluster_labels else 0)
         n_noise = int(np.sum(cluster_labels == -1))
         print(f"HDBSCAN clusters: {n_clusters} (noise docs: {n_noise})")
-
-        # If you want to *force* all docs into clusters, you can optionally
-        # post-assign noise to nearest centroid here. (Not doing it by default.)
 
     elif cluster_method.lower() == "kmeans":
         print(f"KMeans clustering (K={num_clusters})...")
@@ -500,21 +496,19 @@ def cluster_topic(
         )
         final_k = len(set(cluster_labels)) - (1 if -1 in cluster_labels else 0)
         print(f"Final clusters after merge: {final_k}")
-
     else:
         raise ValueError("cluster_method must be one of: 'hdbscan', 'kmeans', 'kmeans_overcluster_merge'")
 
-    # Build cluster -> docs map (skip noise cluster -1)
+    # Build cluster -> docs map (skip noise -1)
     clusters = {}
     for text, lbl in zip(texts, cluster_labels):
         if lbl == -1:
             continue
         clusters.setdefault(int(lbl), []).append(text)
-
     print(f"Total non-noise clusters: {len(clusters)}")
 
     # -----------------------------
-    # REPRESENTATIVE DOCS (for labeling / LLM)
+    # REPRESENTATIVE DOCS
     # -----------------------------
     representatives = _representative_docs(
         texts=texts,
@@ -533,20 +527,144 @@ def cluster_topic(
     print("Saved representatives to:", reps_path)
 
     # -----------------------------
-    # KEYWORDS: c-TF-IDF phrases (task-like)
+    # KEYWORDS: robust c-TF-IDF inside this function
+    # - Pass A: phrases (2-4 grams)
+    # - Pass B: unigrams (acronyms/symbols), filtered by general heuristics
     # -----------------------------
     stop_words = _build_stopwords(extra_stopwords)
+    stop_words = None if stop_words is None else sorted(stop_words)
 
-    # If you want even more "task-like" phrases, keep (2,4) grams;
-    # if you also want acronyms/unigrams (e.g., NER, QA), run an extra unigram pass separately.
-    cluster_keywords = _ctfidf_keywords(
-        clusters=clusters,
-        top_k=top_k_keywords,
+    # Prepare one "cluster document" per cluster
+    labels = sorted(clusters.keys())
+    docs_per_cluster = [" ".join(clusters[lbl]) for lbl in labels]
+    C = len(docs_per_cluster)
+
+    def adapt_df(min_df, max_df):
+        # For small number of cluster-docs, df filtering is unstable; keep everything.
+        if C < 10:
+            return 1, 1.0
+        min_eff = max(1, min(int(min_df), C))
+        max_eff = max_df
+        if isinstance(max_eff, float):
+            if int(np.floor(max_eff * C)) < min_eff:
+                max_eff = 1.0
+        else:
+            max_eff = int(max_eff)
+            if max_eff < min_eff:
+                max_eff = min_eff
+        return min_eff, max_eff
+
+    min_df_eff, max_df_eff = adapt_df(ctfidf_min_df, ctfidf_max_df)
+
+    # token pattern: keeps acronyms, alphanumerics, and hyphenated scientific terms
+    token_pattern = r"(?u)\b[a-zA-Z][a-zA-Z0-9+\-/]{1,}\b"
+
+    def compute_ctfidf_keywords(ngram_range, top_k, min_df, max_df):
+        vect = CountVectorizer(
+            ngram_range=ngram_range,
+            min_df=min_df,
+            max_df=max_df,
+            stop_words=stop_words,
+            lowercase=True,
+            token_pattern=token_pattern,
+        )
+        X = vect.fit_transform(docs_per_cluster)  # CSR
+        vocab = np.array(vect.get_feature_names_out())
+
+        tf = X.astype(np.float64)
+        df = np.asarray((X > 0).sum(axis=0)).ravel().astype(np.float64)
+        idf = np.log((C + 1.0) / (df + 1.0)) + 1.0
+        ctfidf = tf.multiply(idf).tocsr()  # ensure subscriptable / row slicing
+
+        out = {}
+        for i, lbl in enumerate(labels):
+            row = ctfidf.getrow(i).toarray().ravel()
+            if row.size == 0 or row.max() <= 0:
+                out[lbl] = []
+                continue
+            idx = np.argsort(-row)[: top_k * 6]  # oversample, then filter/uniq
+            kws = []
+            seen = set()
+            for j in idx:
+                if row[j] <= 0:
+                    continue
+                term = vocab[j].strip()
+                if term and term not in seen:
+                    kws.append(term)
+                    seen.add(term)
+                if len(kws) >= top_k:
+                    break
+            out[lbl] = kws
+        return out
+
+    # Pass A: phrases
+    kw_phr = compute_ctfidf_keywords(
         ngram_range=ctfidf_ngram_range,
-        min_df=ctfidf_min_df,
-        max_df=ctfidf_max_df,
-        stop_words=stop_words,
+        top_k=top_k_keywords,
+        min_df=min_df_eff,
+        max_df=max_df_eff,
     )
+
+    # Pass B: unigrams (looser df)
+    uni_top_k = max(3, top_k_keywords // 2)
+    uni_min_df = 1 if C < 10 else 2
+    kw_uni_raw = compute_ctfidf_keywords(
+        ngram_range=(1, 1),
+        top_k=uni_top_k * 4,
+        min_df=uni_min_df,
+        max_df=1.0,
+    )
+
+    def is_good_unigram(tok: str) -> bool:
+        t = tok.strip()
+        if not t:
+            return False
+        if len(t) <= 2:
+            return False
+        if t.isdigit():
+            return False
+        if len(t) > 24:
+            return False
+        # keep if:
+        # - contains digits (cd8, p53, 5g)
+        # - contains hyphen/slash/plus (u-net, rna-seq, t-sne)
+        # - short-ish alpha token (acronyms; after lowercase)
+        if any(ch.isdigit() for ch in t):
+            return True
+        if "-" in t or "/" in t or "+" in t:
+            return True
+        if t.isalpha() and 3 <= len(t) <= 7:
+            return True
+        # mixed alnum (covid19, mri3d)
+        if re.fullmatch(r"[a-z0-9]+", t) and any(ch.isalpha() for ch in t) and any(ch.isdigit() for ch in t):
+            return True
+        return False
+
+    # Merge
+    cluster_keywords = {}
+    for lbl in labels:
+        merged = []
+        seen = set()
+
+        for p in kw_phr.get(lbl, []):
+            if p and p not in seen:
+                merged.append(p)
+                seen.add(p)
+            if len(merged) >= top_k_keywords:
+                break
+
+        if len(merged) < top_k_keywords:
+            for u in kw_uni_raw.get(lbl, []):
+                if u in seen:
+                    continue
+                if not is_good_unigram(u):
+                    continue
+                merged.append(u)
+                seen.add(u)
+                if len(merged) >= top_k_keywords:
+                    break
+
+        cluster_keywords[int(lbl)] = merged[:top_k_keywords]
 
     keywords_path = os.path.join(save_dir, "keywords_ctfidf.txt")
     with open(keywords_path, "w", encoding="utf-8") as f:
@@ -555,7 +673,7 @@ def cluster_topic(
     print("Saved c-TF-IDF keywords to:", keywords_path)
 
     # -----------------------------
-    # UMAP 2D VISUALIZATION (for inspection only)
+    # UMAP 2D VISUALIZATION
     # -----------------------------
     print("UMAP 2D visualization...")
     reducer = umap.UMAP(
@@ -589,3 +707,5 @@ def cluster_topic(
     print("Saved cluster plot to:", plot_path)
 
     return clusters, cluster_keywords, representatives
+
+
