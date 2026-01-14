@@ -1,0 +1,20 @@
+
+# Jupyter / Python
+.ipynb_checkpoints/
+__pycache__/
+*.py[cod]
+
+# Secrets
+api_keys/
+.env
+*.key
+
+# Data & outputs
+data/
+out/
+out.zip
+*.zip
+
+# Slurm / batch outputs
+slurm-*.out
+*.batch
