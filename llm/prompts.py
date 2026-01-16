@@ -46,3 +46,12 @@ class FactVerification(Prompt):
         self.context = True
         self.name = "Fact-Verification"
 
+
+class TopicGPTPrompt(Prompt):
+    filename = "topic_gpt.txt"
+
+    def __init__(self):
+        super().__init__()
+        self.context = False
+        self.name = "TopicGPT"
+

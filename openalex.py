@@ -13,6 +13,9 @@ from sklearn.cluster import KMeans
 from sklearn.metrics.pairwise import cosine_distances, cosine_similarity
 from sentence_transformers import SentenceTransformer
 import hdbscan
+from typing import Any
+
+from llm.topic_gpt import TopicGPT
 
 
 def get_openalex_topics(cache_file="data/openalex/topics.json"):
@@ -362,15 +365,13 @@ def _merge_clusters_by_centroid_similarity(
     return new_labels
 
 
-def cluster_topic(topic_url: str, n: int = 20000, representative_abstracts: int = 20, hdb_min_cluster_size: int = 75,
-    hdb_selection_method: str = "eom", random_state: int = 42) -> tuple[dict[int, list[str]], dict[int, int]]:
+def cluster_topic(topic_url: str, n: int = 20000, representative_abstracts: int = 20, random_state: int = 42) \
+        -> tuple[dict[int, list[str]], dict[int, int]]:
     """
     Cluster scientific abstracts for an OpenAlex topic and return representative abstracts per cluster.
     :param topic_url: OpenAlex topic URL.
     :param n: Maximum number of papers to load from the topic.
     :param representative_abstracts: Number of representative texts to return per cluster.
-    :param hdb_min_cluster_size: HDBSCAN minimum cluster size (lower => more/smaller clusters).
-    :param hdb_selection_method: HDBSCAN selection method ("eom" or "leaf").
     :param random_state: Random seed for reproducible UMAP projection.
     :return: (representatives, cluster_sizes)
         - representatives: dict[int, list[str]] mapping cluster_id -> representative texts
@@ -384,8 +385,10 @@ def cluster_topic(topic_url: str, n: int = 20000, representative_abstracts: int 
     embedding_model_name: str = "allenai/specter2_base"
     batch_size: int = 32
 
-    umap_n_components: int = 10
-    umap_n_neighbors: int = 30
+    hdb_min_cluster_size: int = 100
+    hdb_selection_method: str = "leaf"
+    umap_n_components: int = 5
+    umap_n_neighbors: int = 20
     umap_min_dist: float = 0.0
     hdb_min_samples: int = 10
 
@@ -485,3 +488,87 @@ def cluster_topic(topic_url: str, n: int = 20000, representative_abstracts: int 
     return representatives, cluster_sizes
 
 
+def run_topic_gpt(
+    topic_url: str,
+    model: str = "meta-llama/Llama-3.3-70B-Instruct",
+    temperature: float = 0.2,
+    representative_abstracts: int = 20,
+    out_root: str = os.path.join("out", "topics"),
+) -> dict[int, dict[str, Any]]:
+    """
+    Run TopicGPT labeling on clustered representative abstracts.
+
+    :param topic_url: OpenAlex topic URL
+    :param model: LLM model identifier
+    :param temperature: Sampling temperature
+    :param representative_abstracts: Number of reps per cluster (must match filename)
+    :param out_root: Output root directory
+    :return: Dict mapping cluster_id -> TopicGPT result
+    """
+    topic_id: str = topic_url.rstrip("/").split("/")[-1]
+    save_dir: str = os.path.join(out_root, topic_id)
+
+    reps_path = os.path.join(
+        save_dir, f"representatives_top{representative_abstracts}.txt"
+    )
+    if not os.path.exists(reps_path):
+        raise FileNotFoundError(f"Missing representatives file: {reps_path}")
+
+    # -----------------------------
+    # Parse representatives file
+    # -----------------------------
+    clusters: dict[int, list[str]] = {}
+    current_cluster: int | None = None
+
+    header_re = re.compile(r"^Cluster\s+(\d+)\s+\(n=\d+\):")
+    rep_re = re.compile(r"^\s*\[\d+\]\s+(.*)$")
+
+    with open(reps_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.rstrip("\n")
+
+            header = header_re.match(line)
+            if header:
+                current_cluster = int(header.group(1))
+                clusters[current_cluster] = []
+                continue
+
+            rep = rep_re.match(line)
+            if rep and current_cluster is not None:
+                clusters[current_cluster].append(rep.group(1))
+
+    if not clusters:
+        raise ValueError("No clusters found in representatives file.")
+
+    # -----------------------------
+    # Run TopicGPT
+    # -----------------------------
+    topic_gpt = TopicGPT(model=model, temperature=temperature)
+
+    results: dict[int, dict[str, Any]] = {}
+    for cluster_id in sorted(clusters):
+        results[cluster_id] = topic_gpt.label_cluster(
+            cluster_id=cluster_id,
+            abstracts=clusters[cluster_id],
+        )
+
+    # -----------------------------
+    # Save results
+    # -----------------------------
+    out_path = os.path.join(save_dir, "topicgpt_labels.json")
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "topic_id": topic_id,
+                "topic_url": topic_url,
+                "model": model,
+                "temperature": temperature,
+                "clusters": results,
+            },
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
+
+    print("Saved TopicGPT labels to:", out_path)
+    return results
