@@ -11,8 +11,8 @@ from sklearn.preprocessing import normalize
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.cluster import KMeans
 from sklearn.metrics.pairwise import cosine_distances, cosine_similarity
-
 from sentence_transformers import SentenceTransformer
+import hdbscan
 
 
 def get_openalex_topics(cache_file="data/openalex/topics.json"):
@@ -362,350 +362,126 @@ def _merge_clusters_by_centroid_similarity(
     return new_labels
 
 
-def cluster_topic(
-    topic_url,
-    n=20000,
-    # clustering options
-    cluster_method="hdbscan",  # "hdbscan" (recommended), "kmeans", or "kmeans_overcluster_merge"
-    num_clusters=30,           # used for kmeans; for overcluster, this is initial K
-    target_clusters=10,        # used for overcluster-merge (final target)
-    # UMAP for clustering (high-D) + for visualization (2D)
-    umap_cluster_n_components=10,
-    umap_cluster_n_neighbors=30,
-    umap_cluster_min_dist=0.0,
-    umap_vis_n_neighbors=15,
-    umap_vis_min_dist=0.1,
-    # HDBSCAN settings
-    hdb_min_cluster_size=75,
-    hdb_min_samples=10,
-    hdb_selection_method="eom",  # or "leaf" for more granular clusters
-    # keywords (c-TF-IDF)
-    top_k_keywords=8,
-    ctfidf_ngram_range=(2, 4),    # phrases (task-like)
-    ctfidf_min_df=3,
-    ctfidf_max_df=0.35,
-    extra_stopwords=None,
-    # reps for LLM / inspection
-    representative_per_cluster=5,
-    # embedding model
-    embedding_model_name="allenai/specter2_base",
-    batch_size=32,
-    # merge threshold (only for overcluster-merge)
-    merge_sim_threshold=0.90,
-    # output
-    out_root=os.path.join("out", "topics"),
-    random_state=42,
-):
+def cluster_topic(topic_url: str, n: int = 20000, representative_abstracts: int = 20, hdb_min_cluster_size: int = 75,
+    hdb_selection_method: str = "eom", random_state: int = 42) -> tuple[dict[int, list[str]], dict[int, int]]:
     """
-    SOTA-ish scientific abstract topic extraction:
-    - SPECTER2 embeddings (normalized)
-    - clustering: HDBSCAN on UMAP(10D) (recommended) OR KMeans variants
-    - topic representation: c-TF-IDF phrase keywords (2-4 grams) + domain stopwords
-      + an internal unigram pass for acronyms/symbols (domain-agnostic)
-    - representative docs per cluster for LLM labeling
-    - UMAP 2D visualization
-
-    Returns:
-      clusters: {label: [texts]}
-      cluster_keywords: {label: [phrases]}
-      representatives: {label: [rep_texts]}
+    Cluster scientific abstracts for an OpenAlex topic and return representative abstracts per cluster.
+    :param topic_url: OpenAlex topic URL.
+    :param n: Maximum number of papers to load from the topic.
+    :param representative_abstracts: Number of representative texts to return per cluster.
+    :param hdb_min_cluster_size: HDBSCAN minimum cluster size (lower => more/smaller clusters).
+    :param hdb_selection_method: HDBSCAN selection method ("eom" or "leaf").
+    :param random_state: Random seed for reproducible UMAP projection.
+    :return: (representatives, cluster_sizes)
+        - representatives: dict[int, list[str]] mapping cluster_id -> representative texts
+        - cluster_sizes: dict[int, int] mapping cluster_id -> number of texts in cluster
     """
-    import numpy as np
-    import re
-    from sklearn.feature_extraction.text import CountVectorizer
+    out_root: str = os.path.join("out", "topics")
 
     # -----------------------------
-    # LOAD DATA
+    # Constants (kept internal for simplicity)
     # -----------------------------
-    topic_id = topic_url.rstrip("/").split("/")[-1]
-    save_dir = os.path.join(out_root, topic_id)
+    embedding_model_name: str = "allenai/specter2_base"
+    batch_size: int = 32
+
+    umap_n_components: int = 10
+    umap_n_neighbors: int = 30
+    umap_min_dist: float = 0.0
+    hdb_min_samples: int = 10
+
+    # -----------------------------
+    # Load texts
+    # -----------------------------
+    topic_id: str = topic_url.rstrip("/").split("/")[-1]
+    save_dir: str = os.path.join(out_root, topic_id)
     os.makedirs(save_dir, exist_ok=True)
 
-    texts = load_topic_title_abstract(topic_url, n=n)
+    texts: list[str] = load_topic_title_abstract(topic_url, n=n)
     if not texts:
         print("No papers loaded.")
-        return None, None, None
+        return {}, {}
 
     texts = [_normalize_text(t) for t in texts]
     print(f"Loaded {len(texts)} papers. Computing embeddings ({embedding_model_name})...")
 
     # -----------------------------
-    # EMBEDDINGS
+    # Embeddings (CPU/GPU auto)
     # -----------------------------
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device: str = "cuda" if torch.cuda.is_available() else "cpu"
     model = SentenceTransformer(embedding_model_name, device=device)
-    embeddings = model.encode(
+
+    emb: np.ndarray = model.encode(
         texts,
         batch_size=batch_size,
         show_progress_bar=True,
         convert_to_numpy=True,
         normalize_embeddings=False,
     )
-    embeddings = normalize(embeddings)
-    print("Embeddings computed. Shape:", embeddings.shape)
+    emb = normalize(emb)  # cosine geometry
+    print("Embeddings computed. Shape:", emb.shape)
 
     # -----------------------------
-    # CLUSTERING
+    # UMAP (for clustering)
     # -----------------------------
-    cluster_labels = None
-
-    if cluster_method.lower() == "hdbscan":
-        try:
-            import hdbscan
-        except ImportError as e:
-            raise ImportError("hdbscan is required for cluster_method='hdbscan'. Install: pip install hdbscan") from e
-
-        print("UMAP (for clustering) -> HDBSCAN clustering...")
-        umap_cluster = umap.UMAP(
-            n_neighbors=umap_cluster_n_neighbors,
-            n_components=umap_cluster_n_components,
-            min_dist=umap_cluster_min_dist,
-            metric="cosine",
-            random_state=random_state,
-        )
-        emb_umap = umap_cluster.fit_transform(embeddings)
-
-        clusterer = hdbscan.HDBSCAN(
-            min_cluster_size=hdb_min_cluster_size,
-            min_samples=hdb_min_samples,
-            metric="euclidean",
-            cluster_selection_method=hdb_selection_method,
-        )
-        cluster_labels = clusterer.fit_predict(emb_umap)
-
-        n_clusters = len(set(cluster_labels)) - (1 if -1 in cluster_labels else 0)
-        n_noise = int(np.sum(cluster_labels == -1))
-        print(f"HDBSCAN clusters: {n_clusters} (noise docs: {n_noise})")
-
-    elif cluster_method.lower() == "kmeans":
-        print(f"KMeans clustering (K={num_clusters})...")
-        km = KMeans(n_clusters=num_clusters, random_state=random_state, n_init=10)
-        cluster_labels = km.fit_predict(embeddings)
-
-    elif cluster_method.lower() == "kmeans_overcluster_merge":
-        print(f"KMeans overcluster (K={num_clusters}) then merge to ~{target_clusters}...")
-        km = KMeans(n_clusters=num_clusters, random_state=random_state, n_init=10)
-        initial_labels = km.fit_predict(embeddings)
-
-        cluster_labels = _merge_clusters_by_centroid_similarity(
-            texts=texts,
-            emb_norm=embeddings,
-            labels=initial_labels,
-            target_k=target_clusters,
-            sim_threshold=merge_sim_threshold,
-        )
-        final_k = len(set(cluster_labels)) - (1 if -1 in cluster_labels else 0)
-        print(f"Final clusters after merge: {final_k}")
-    else:
-        raise ValueError("cluster_method must be one of: 'hdbscan', 'kmeans', 'kmeans_overcluster_merge'")
-
-    # Build cluster -> docs map (skip noise -1)
-    clusters = {}
-    for text, lbl in zip(texts, cluster_labels):
-        if lbl == -1:
-            continue
-        clusters.setdefault(int(lbl), []).append(text)
-    print(f"Total non-noise clusters: {len(clusters)}")
+    emb_umap: np.ndarray = umap.UMAP(
+        n_neighbors=umap_n_neighbors,
+        n_components=umap_n_components,
+        min_dist=umap_min_dist,
+        metric="cosine",
+        random_state=random_state,
+    ).fit_transform(emb)
 
     # -----------------------------
-    # REPRESENTATIVE DOCS
+    # HDBSCAN clustering
     # -----------------------------
-    representatives = _representative_docs(
-        texts=texts,
-        emb_norm=embeddings,
-        labels=cluster_labels,
-        top_m=representative_per_cluster,
+    clusterer = hdbscan.HDBSCAN(
+        min_cluster_size=hdb_min_cluster_size,
+        min_samples=hdb_min_samples,
+        metric="euclidean",
+        cluster_selection_method=hdb_selection_method,
     )
+    labels: np.ndarray = clusterer.fit_predict(emb_umap)
 
-    reps_path = os.path.join(save_dir, "representatives.txt")
+    n_clusters: int = len(set(labels)) - (1 if -1 in labels else 0)
+    n_noise: int = int(np.sum(labels == -1))
+    print(f"HDBSCAN clusters: {n_clusters} (noise docs: {n_noise})")
+
+    # -----------------------------
+    # Pick representative abstracts per cluster
+    # -----------------------------
+    representatives: dict[int, list[str]] = {}
+    cluster_sizes: dict[int, int] = {}
+
+    for c in sorted(set(labels)):
+        if c == -1:
+            continue  # skip noise by design
+
+        idxs: np.ndarray = np.where(labels == c)[0]
+        cluster_sizes[int(c)] = int(len(idxs))
+
+        k: int = min(representative_abstracts, len(idxs))
+
+        cluster_emb: np.ndarray = emb[idxs]
+        centroid: np.ndarray = cluster_emb.mean(axis=0, keepdims=True)
+
+        sims: np.ndarray = cosine_similarity(cluster_emb, centroid).ravel()
+        top_local: np.ndarray = np.argsort(-sims)[:k]
+        top_idxs: np.ndarray = idxs[top_local]
+
+        representatives[int(c)] = [texts[i] for i in top_idxs]
+
+    # -----------------------------
+    # Save representatives for TopicGPT step
+    # -----------------------------
+    reps_path: str = os.path.join(save_dir, f"representatives_top{representative_abstracts}.txt")
     with open(reps_path, "w", encoding="utf-8") as f:
-        for lbl in sorted(representatives.keys()):
-            f.write(f"Cluster {lbl} (n={len(clusters.get(lbl, []))}):\n")
-            for i, t in enumerate(representatives[lbl], 1):
+        for c in sorted(representatives.keys()):
+            f.write(f"Cluster {c} (n={cluster_sizes[c]}):\n")
+            for i, t in enumerate(representatives[c], 1):
                 f.write(f"  [{i}] {t}\n")
             f.write("\n")
     print("Saved representatives to:", reps_path)
 
-    # -----------------------------
-    # KEYWORDS: robust c-TF-IDF inside this function
-    # - Pass A: phrases (2-4 grams)
-    # - Pass B: unigrams (acronyms/symbols), filtered by general heuristics
-    # -----------------------------
-    stop_words = _build_stopwords(extra_stopwords)
-    stop_words = None if stop_words is None else sorted(stop_words)
-
-    # Prepare one "cluster document" per cluster
-    labels = sorted(clusters.keys())
-    docs_per_cluster = [" ".join(clusters[lbl]) for lbl in labels]
-    C = len(docs_per_cluster)
-
-    def adapt_df(min_df, max_df):
-        # For small number of cluster-docs, df filtering is unstable; keep everything.
-        if C < 10:
-            return 1, 1.0
-        min_eff = max(1, min(int(min_df), C))
-        max_eff = max_df
-        if isinstance(max_eff, float):
-            if int(np.floor(max_eff * C)) < min_eff:
-                max_eff = 1.0
-        else:
-            max_eff = int(max_eff)
-            if max_eff < min_eff:
-                max_eff = min_eff
-        return min_eff, max_eff
-
-    min_df_eff, max_df_eff = adapt_df(ctfidf_min_df, ctfidf_max_df)
-
-    # token pattern: keeps acronyms, alphanumerics, and hyphenated scientific terms
-    token_pattern = r"(?u)\b[a-zA-Z][a-zA-Z0-9+\-/]{1,}\b"
-
-    def compute_ctfidf_keywords(ngram_range, top_k, min_df, max_df):
-        vect = CountVectorizer(
-            ngram_range=ngram_range,
-            min_df=min_df,
-            max_df=max_df,
-            stop_words=stop_words,
-            lowercase=True,
-            token_pattern=token_pattern,
-        )
-        X = vect.fit_transform(docs_per_cluster)  # CSR
-        vocab = np.array(vect.get_feature_names_out())
-
-        tf = X.astype(np.float64)
-        df = np.asarray((X > 0).sum(axis=0)).ravel().astype(np.float64)
-        idf = np.log((C + 1.0) / (df + 1.0)) + 1.0
-        ctfidf = tf.multiply(idf).tocsr()  # ensure subscriptable / row slicing
-
-        out = {}
-        for i, lbl in enumerate(labels):
-            row = ctfidf.getrow(i).toarray().ravel()
-            if row.size == 0 or row.max() <= 0:
-                out[lbl] = []
-                continue
-            idx = np.argsort(-row)[: top_k * 6]  # oversample, then filter/uniq
-            kws = []
-            seen = set()
-            for j in idx:
-                if row[j] <= 0:
-                    continue
-                term = vocab[j].strip()
-                if term and term not in seen:
-                    kws.append(term)
-                    seen.add(term)
-                if len(kws) >= top_k:
-                    break
-            out[lbl] = kws
-        return out
-
-    # Pass A: phrases
-    kw_phr = compute_ctfidf_keywords(
-        ngram_range=ctfidf_ngram_range,
-        top_k=top_k_keywords,
-        min_df=min_df_eff,
-        max_df=max_df_eff,
-    )
-
-    # Pass B: unigrams (looser df)
-    uni_top_k = max(3, top_k_keywords // 2)
-    uni_min_df = 1 if C < 10 else 2
-    kw_uni_raw = compute_ctfidf_keywords(
-        ngram_range=(1, 1),
-        top_k=uni_top_k * 4,
-        min_df=uni_min_df,
-        max_df=1.0,
-    )
-
-    def is_good_unigram(tok: str) -> bool:
-        t = tok.strip()
-        if not t:
-            return False
-        if len(t) <= 2:
-            return False
-        if t.isdigit():
-            return False
-        if len(t) > 24:
-            return False
-        # keep if:
-        # - contains digits (cd8, p53, 5g)
-        # - contains hyphen/slash/plus (u-net, rna-seq, t-sne)
-        # - short-ish alpha token (acronyms; after lowercase)
-        if any(ch.isdigit() for ch in t):
-            return True
-        if "-" in t or "/" in t or "+" in t:
-            return True
-        if t.isalpha() and 3 <= len(t) <= 7:
-            return True
-        # mixed alnum (covid19, mri3d)
-        if re.fullmatch(r"[a-z0-9]+", t) and any(ch.isalpha() for ch in t) and any(ch.isdigit() for ch in t):
-            return True
-        return False
-
-    # Merge
-    cluster_keywords = {}
-    for lbl in labels:
-        merged = []
-        seen = set()
-
-        for p in kw_phr.get(lbl, []):
-            if p and p not in seen:
-                merged.append(p)
-                seen.add(p)
-            if len(merged) >= top_k_keywords:
-                break
-
-        if len(merged) < top_k_keywords:
-            for u in kw_uni_raw.get(lbl, []):
-                if u in seen:
-                    continue
-                if not is_good_unigram(u):
-                    continue
-                merged.append(u)
-                seen.add(u)
-                if len(merged) >= top_k_keywords:
-                    break
-
-        cluster_keywords[int(lbl)] = merged[:top_k_keywords]
-
-    keywords_path = os.path.join(save_dir, "keywords_ctfidf.txt")
-    with open(keywords_path, "w", encoding="utf-8") as f:
-        for lbl in sorted(cluster_keywords.keys()):
-            f.write(f"Cluster {lbl}: {', '.join(cluster_keywords[lbl])}\n")
-    print("Saved c-TF-IDF keywords to:", keywords_path)
-
-    # -----------------------------
-    # UMAP 2D VISUALIZATION
-    # -----------------------------
-    print("UMAP 2D visualization...")
-    reducer = umap.UMAP(
-        n_neighbors=umap_vis_n_neighbors,
-        min_dist=umap_vis_min_dist,
-        metric="cosine",
-        random_state=random_state,
-    )
-    embedding_2d = reducer.fit_transform(embeddings)
-
-    plt.figure(figsize=(10, 8))
-    palette = plt.get_cmap("tab20")
-    for lbl in sorted(set(cluster_labels)):
-        if lbl == -1:
-            continue
-        idxs = np.where(cluster_labels == lbl)[0]
-        plt.scatter(
-            embedding_2d[idxs, 0],
-            embedding_2d[idxs, 1],
-            s=18,
-            c=[palette(int(lbl) % 20)],
-            label=f"Cluster {lbl}",
-            alpha=0.55,
-        )
-
-    plt.title(f"Clusters for topic {topic_id} ({cluster_method})")
-    plt.legend(fontsize=8, markerscale=1.2, frameon=False)
-    plot_path = os.path.join(save_dir, "cluster_umap2d.png")
-    plt.savefig(plot_path, dpi=300, bbox_inches="tight")
-    plt.close()
-    print("Saved cluster plot to:", plot_path)
-
-    return clusters, cluster_keywords, representatives
+    return representatives, cluster_sizes
 
 

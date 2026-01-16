@@ -18,3 +18,4 @@ out.zip
 # Slurm / batch outputs
 slurm-*.out
 *.batch
+.idea/
