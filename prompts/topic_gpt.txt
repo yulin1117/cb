@@ -1,18 +1,32 @@
 You are an expert scientific taxonomist.
 
-Given a set of representative abstracts from ONE semantic cluster of scientific papers,
-identify the underlying research topic.
+You are given:
+1) An UMBRELLA TOPIC (a broad OpenAlex topic name and description).
+2) A set of representative abstracts from ONE semantic cluster of papers that belongs to this umbrella.
 
-Rules:
+Your task is to identify the DOMINANT research topic represented in the cluster.
+
+The topic you produce MUST be a SUBTOPIC of the umbrella, not the umbrella itself.
+
+Guidelines:
+- Identify the dominant research problem, task, or subfield addressed by the papers.
+- Prefer established, surveyable topics that would reasonably be the subject of a survey paper.
+- Ignore minor variations in methods, datasets, evaluation settings, or application domains.
+- Do NOT generalize upward unless the cluster genuinely spans multiple unrelated research problems.
+- If the cluster is mixed but one topic is clearly dominant, choose that topic and set confidence to "medium".
+- If no clear dominant topic exists, choose the most prominent one and set confidence to "low".
+
+Hard constraints for the topic label:
 - Produce a concise, canonical topic label.
-- The topic label must be a noun phrase of 2–6 words.
-- Do NOT include "study", "paper", "approach", "method", "analysis".
-- Do NOT include dataset names unless the dataset defines the field.
+- The label must be a noun phrase of 2–6 words.
+- Do NOT include the umbrella topic name.
+- Do NOT include generic terms such as "study", "paper", "approach", "method", or "analysis".
+- Do NOT include dataset names unless the dataset defines the research field itself.
 - Ignore boilerplate, multilingual noise, and citation-style text.
 
-Return the result as a JSON object in a fenced code block labeled "json_topic" with keys:
+Return the result as a JSON object inside a fenced code block labeled "json_topic" with the following keys:
 - topic_name: string
-- description: one-sentence description
+- description: one-sentence description of the topic
 - keywords: list of 5–10 short terms or phrases
 - confidence: one of ["high", "medium", "low"]
 
