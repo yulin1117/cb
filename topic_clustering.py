@@ -280,25 +280,98 @@ def cluster_topic(topic_url: str, n: int = 20000, representative_abstracts: int 
     return representatives, cluster_sizes
 
 
-def run_topic_gpt(topic_url: str, model: str = "meta-llama/Llama-3.3-70B-Instruct", temperature: float = 0.2,
-                  representative_abstracts: int = 20) -> dict[int, dict[str, Any]]:
+def run_topic_gpt(
+    topic_url: str,
+    model: str = "meta-llama/Llama-3.3-70B-Instruct",
+    temperature: float = 0.2,
+    representative_abstracts: int = 20,
+    out_root: str = os.path.join("out", "topics"),
+) -> dict[int, dict[str, Any]]:
     """
     Run TopicGPT labeling on clustered representative abstracts.
+    Loads umbrella topic metadata (display_name + description) from data/openalex/topics.json.
+    If the file is missing, calls get_openalex_topics() to create it.
+
     :param topic_url: OpenAlex topic URL
     :param model: LLM model identifier
     :param temperature: Sampling temperature
     :param representative_abstracts: Number of reps per cluster (must match filename)
+    :param out_root: Output root directory
     :return: Dict mapping cluster_id -> TopicGPT result
     """
-    out_root: str = os.path.join("out", "topics")
-    topic_id: str = topic_url.rstrip("/").split("/")[-1]
+    # -----------------------------
+    # Resolve topic_id and paths
+    # -----------------------------
+    topic_url = topic_url.rstrip("/")  # CHANGED: normalize for matching
+    topic_id: str = topic_url.split("/")[-1]  # e.g. "T10346"
     save_dir: str = os.path.join(out_root, topic_id)
 
-    reps_path = os.path.join(
-        save_dir, f"representatives_top{representative_abstracts}.txt"
-    )
+    reps_path: str = os.path.join(save_dir, f"representatives_top{representative_abstracts}.txt")
     if not os.path.exists(reps_path):
         raise FileNotFoundError(f"Missing representatives file: {reps_path}")
+
+    # -----------------------------
+    # Load OpenAlex umbrella topic metadata
+    # -----------------------------
+    topics_path: str = os.path.join("data", "openalex", "topics.json")
+
+    if not os.path.exists(topics_path):
+        # Create it, then try again (local import avoids circular import issues)
+        from openalex import get_openalex_topics
+        get_openalex_topics()
+        if not os.path.exists(topics_path):
+            raise FileNotFoundError(
+                f"{topics_path} not found even after calling get_openalex_topics()."
+            )
+
+    with open(topics_path, "r", encoding="utf-8") as f:
+        topics_data = json.load(f)
+
+    # topics.json may be a list[dict] or dict[str, dict] depending on your pipeline.
+    topic_obj: dict[str, Any] | None = None
+
+    if isinstance(topics_data, list):
+        # Each element has e.g. {"id": "https://openalex.org/T10346", ...}
+        for t in topics_data:
+            if not isinstance(t, dict):
+                continue
+            tid = str(t.get("id", "")).rstrip("/")
+            # CHANGED: also allow matching by plain topic_id if stored that way
+            if tid == topic_url or tid.endswith(f"/{topic_id}") or tid == topic_id:
+                topic_obj = t
+                break
+
+    elif isinstance(topics_data, dict):
+        # Could be keyed by topic_id or topic_url
+        topic_obj = topics_data.get(topic_id) or topics_data.get(topic_url)
+
+        # Or could be {"results": [...]} depending on your fetch format
+        if topic_obj is None and "results" in topics_data and isinstance(topics_data["results"], list):
+            for t in topics_data["results"]:
+                if not isinstance(t, dict):
+                    continue
+                tid = str(t.get("id", "")).rstrip("/")
+                if tid == topic_url or tid.endswith(f"/{topic_id}") or tid == topic_id:
+                    topic_obj = t
+                    break
+
+    if topic_obj is None:
+        raise KeyError(
+            f"Topic {topic_url} ({topic_id}) not found in {topics_path}. "
+            f"Check how topics.json is structured."
+        )
+
+    umbrella_display_name: str = str(topic_obj.get("display_name", "")).strip()
+    umbrella_description: str = str(topic_obj.get("description", "")).strip()
+
+    # Umbrella metadata is REQUIRED for your prompt design
+    if not umbrella_display_name or not umbrella_description:
+        raise ValueError(
+            f"Umbrella metadata missing for {topic_url}.\n"
+            f"display_name='{umbrella_display_name}'\n"
+            f"description length={len(umbrella_description)}\n"
+            f"Fix topics.json or refresh via get_openalex_topics()."
+        )
 
     # -----------------------------
     # Parse representatives file
@@ -336,6 +409,8 @@ def run_topic_gpt(topic_url: str, model: str = "meta-llama/Llama-3.3-70B-Instruc
         results[cluster_id] = topic_gpt.label_cluster(
             cluster_id=cluster_id,
             abstracts=clusters[cluster_id],
+            umbrella_display_name=umbrella_display_name,
+            umbrella_description=umbrella_description,
         )
 
     # -----------------------------
@@ -347,8 +422,11 @@ def run_topic_gpt(topic_url: str, model: str = "meta-llama/Llama-3.3-70B-Instruc
             {
                 "topic_id": topic_id,
                 "topic_url": topic_url,
+                "umbrella_display_name": umbrella_display_name,
+                "umbrella_description": umbrella_description,
                 "model": model,
                 "temperature": temperature,
+                "representative_abstracts": representative_abstracts,
                 "clusters": results,
             },
             f,
