@@ -157,17 +157,88 @@ def _merge_clusters_by_centroid_similarity(
     return new_labels
 
 
-def cluster_topic(topic_url: str, n: int = 20000, representative_abstracts: int = 20, random_state: int = 42) \
-        -> tuple[dict[int, list[str]], dict[int, int]]:
+def _cluster_scores_from_embeddings(emb: np.ndarray, labels: np.ndarray) -> tuple[dict[int, float], dict[int, float], dict[int, float]]:
     """
-    Cluster scientific abstracts for an OpenAlex topic and return representative abstracts per cluster.
-    :param topic_url: OpenAlex topic URL.
+    Compute coherence, distinctiveness, and score per cluster using ORIGINAL embedding space.
+    Assumes emb is L2-normalized (cosine geometry).
+    """
+    cluster_ids = [int(c) for c in sorted(set(labels)) if c != -1]
+    if not cluster_ids:
+        return {}, {}, {}
+
+    # ---- centroids ----
+    centroids = {}
+    members = {}
+    for c in cluster_ids:
+        idxs = np.where(labels == c)[0]
+        members[c] = idxs
+        mu = emb[idxs].mean(axis=0, keepdims=True)
+        mu /= (np.linalg.norm(mu) + 1e-12)  # normalize centroid
+        centroids[c] = mu
+
+    # stack centroids for fast pairwise cosine
+    C = np.vstack([centroids[c] for c in cluster_ids])  # shape: (k, d)
+    CC = C @ C.T  # cosine similarities since rows normalized
+
+    # ---- coherence ----
+    coherence = {}
+    for i, c in enumerate(cluster_ids):
+        idxs = members[c]
+        mu = C[i:i+1]  # (1, d)
+        # mean cosine to centroid (dot product since normalized)
+        coherence[c] = float((emb[idxs] @ mu.T).mean())
+
+    # ---- distinctiveness ----
+    distinctiveness = {}
+    for i, c in enumerate(cluster_ids):
+        row = CC[i].copy()
+        row[i] = -np.inf  # ignore self
+        max_sim = float(np.max(row)) if len(cluster_ids) > 1 else 0.0
+        distinctiveness[c] = float(1.0 - max_sim)
+
+    # ---- combined score ----
+    score = {c: coherence[c] * distinctiveness[c] for c in cluster_ids}
+    return coherence, distinctiveness, score
+
+
+def cluster_topic(
+        topic_url: str,
+        n: int = 20000,
+        representative_abstracts: int = 20,
+        random_state: int = 42,
+        return_all_clusters: bool = False,
+        size_cap: int = 2000,
+        distinct_top_k: int = 1,
+        top_k_candidates: int = 10,
+) -> tuple[dict[int, list[str]], dict[int, int], dict[int, dict[str, float]]]:
+    """
+    Cluster scientific abstracts for an OpenAlex topic and return representative abstracts.
+
+    The method embeds abstracts using a scientific sentence embedding model, clusters them
+    with UMAP + HDBSCAN, and scores clusters for semantic coherence and distinctiveness in the
+    original embedding space. Unlike an early-selection pipeline, this method does not need to
+    commit to a single cluster before downstream labeling: it can return either (a) all clusters
+    or (b) a top-K set of candidate clusters ranked by the unsupervised score, enabling final
+    selection after TopicGPT (e.g., using an LLM confidence threshold). Representative abstracts
+    are chosen as the most central documents within each returned cluster.
+
+    :param topic_url: OpenAlex topic URL identifying the umbrella topic to process.
     :param n: Maximum number of papers to load from the topic.
-    :param representative_abstracts: Number of representative texts to return per cluster.
-    :param random_state: Random seed for reproducible UMAP projection.
-    :return: (representatives, cluster_sizes)
-        - representatives: dict[int, list[str]] mapping cluster_id -> representative texts
-        - cluster_sizes: dict[int, int] mapping cluster_id -> number of texts in cluster
+    :param representative_abstracts: Number of representative abstracts to return per cluster.
+    :param random_state: Random seed for reproducible UMAP projection and clustering.
+    :param return_all_clusters: Whether to return representative abstracts for all clusters.
+        If False, returns only the top-K candidate clusters by unsupervised score.
+    :param size_cap: Upper bound used when computing the cluster size prior to prevent very
+        large clusters from dominating the ranking.
+    :param distinct_top_k: Number of most similar sibling cluster centroids considered when
+        computing cluster distinctiveness.
+    :param top_k_candidates: Number of highest-scoring clusters to return when
+        return_all_clusters is False.
+    :return: (representatives, cluster_sizes, cluster_metrics)
+        - representatives: dict[int, list[str]] mapping cluster_id to representative abstracts.
+        - cluster_sizes: dict[int, int] mapping cluster_id to the number of papers in each returned cluster.
+        - cluster_metrics: dict[int, dict[str, float]] mapping cluster_id to coherence/distinctiveness/score.
+
     """
     out_root: str = os.path.join("out", "topics")
 
@@ -185,6 +256,71 @@ def cluster_topic(topic_url: str, n: int = 20000, representative_abstracts: int 
     hdb_min_samples: int = 10
 
     # -----------------------------
+    # Helpers
+    # -----------------------------
+    def _compute_cluster_scores(
+            emb_norm: np.ndarray,
+            labels: np.ndarray,
+            sizes: dict[int, int],
+            *,
+            size_cap_: int,
+            distinct_top_k_: int
+    ) -> tuple[dict[int, float], dict[int, float], dict[int, float]]:
+        """
+        Compute coherence, distinctiveness, and final score for each non-noise cluster
+        using ORIGINAL embedding space (emb_norm must be L2-normalized).
+        """
+        cluster_ids = [int(c) for c in sorted(set(labels)) if c != -1]
+        if not cluster_ids:
+            return {}, {}, {}
+
+        # centroids (normalized)
+        centroids = []
+        member_idxs = {}
+        for c in cluster_ids:
+            idxs = np.where(labels == c)[0]
+            member_idxs[c] = idxs
+            mu = emb_norm[idxs].mean(axis=0)
+            mu = mu / (np.linalg.norm(mu) + 1e-12)
+            centroids.append(mu)
+        C = np.vstack(centroids)  # (k, d), rows normalized
+
+        # pairwise centroid cosine
+        CC = C @ C.T  # (k, k)
+
+        # coherence: mean cosine to centroid
+        coherence = {}
+        for i, c in enumerate(cluster_ids):
+            idxs = member_idxs[c]
+            mu = C[i]  # (d,)
+            coherence[c] = float((emb_norm[idxs] @ mu).mean())
+
+        # distinctiveness: 1 - agg(top sims to other centroids)
+        distinctiveness = {}
+        k = len(cluster_ids)
+        for i, c in enumerate(cluster_ids):
+            sims = CC[i].copy()
+            sims[i] = -np.inf
+            if k == 1:
+                agg = 0.0
+            else:
+                dtk = max(1, int(distinct_top_k_))
+                dtk = min(dtk, k - 1)
+                top = np.partition(sims, -dtk)[-dtk:]
+                agg = float(top.mean()) if dtk > 1 else float(top.max())
+            distinctiveness[c] = float(1.0 - agg)
+
+        # size prior: sqrt(min(n_c, cap)/cap)
+        score = {}
+        cap = max(1, int(size_cap_))
+        for c in cluster_ids:
+            n_c = int(sizes.get(c, 0))
+            size_prior = float(np.sqrt(min(n_c, cap) / cap))
+            score[c] = float(coherence[c] * distinctiveness[c] * size_prior)
+
+        return coherence, distinctiveness, score
+
+    # -----------------------------
     # Load texts
     # -----------------------------
     topic_id: str = topic_url.rstrip("/").split("/")[-1]
@@ -194,7 +330,7 @@ def cluster_topic(topic_url: str, n: int = 20000, representative_abstracts: int 
     texts: list[str] = load_topic_title_abstract(topic_url, n=n)
     if not texts:
         print("No papers loaded.")
-        return {}, {}
+        return {}, {}, {}
 
     texts = [_normalize_text(t) for t in texts]
     print(f"Loaded {len(texts)} papers. Computing embeddings ({embedding_model_name})...")
@@ -212,7 +348,9 @@ def cluster_topic(topic_url: str, n: int = 20000, representative_abstracts: int 
         convert_to_numpy=True,
         normalize_embeddings=False,
     )
-    emb = normalize(emb)  # cosine geometry
+
+    # normalize for cosine geometry
+    emb = normalize(emb)
     print("Embeddings computed. Shape:", emb.shape)
 
     # -----------------------------
@@ -242,51 +380,102 @@ def cluster_topic(topic_url: str, n: int = 20000, representative_abstracts: int 
     print(f"HDBSCAN clusters: {n_clusters} (noise docs: {n_noise})")
 
     # -----------------------------
-    # Pick representative abstracts per cluster
+    # Cluster sizes (all clusters, used for scoring)
+    # -----------------------------
+    all_cluster_sizes: dict[int, int] = {}
+    for c in sorted(set(labels)):
+        if c == -1:
+            continue
+        idxs = np.where(labels == c)[0]
+        all_cluster_sizes[int(c)] = int(len(idxs))
+
+    # -----------------------------
+    # Score clusters (ORIGINAL embedding space)
+    # -----------------------------
+    coherence, distinctiveness, score = _compute_cluster_scores(
+        emb, labels, all_cluster_sizes,
+        size_cap_=size_cap,
+        distinct_top_k_=distinct_top_k,
+    )
+
+    if not score:
+        print("No non-noise clusters to score.")
+        return {}, {}, {}
+
+    # Persist scores for auditing/debugging
+    scores_path: str = os.path.join(save_dir, "cluster_scores.tsv")
+    with open(scores_path, "w", encoding="utf-8") as f:
+        f.write("cluster_id\tn\tcoherence\tdistinctiveness\tscore\n")
+        for c in sorted(score.keys()):
+            f.write(
+                f"{c}\t{all_cluster_sizes[c]}\t{coherence[c]:.6f}\t{distinctiveness[c]:.6f}\t{score[c]:.6f}\n"
+            )
+    print("Saved cluster scores to:", scores_path)
+
+    # -----------------------------
+    # Decide which clusters to return (no final selection here)
+    # -----------------------------
+    if return_all_clusters:
+        clusters_to_emit = sorted(score.keys())
+        print(f"Returning all scored clusters: {len(clusters_to_emit)}")
+    else:
+        k = max(1, int(top_k_candidates))
+        clusters_sorted = sorted(score.keys(), key=lambda c: score[c], reverse=True)
+        clusters_to_emit = clusters_sorted[:min(k, len(clusters_sorted))]
+        print(f"Returning top-{len(clusters_to_emit)} candidate clusters by score "
+              f"(top_k_candidates={k}).")
+
+    # -----------------------------
+    # Pick representative abstracts per returned cluster
     # -----------------------------
     representatives: dict[int, list[str]] = {}
     cluster_sizes: dict[int, int] = {}
+    cluster_metrics: dict[int, dict[str, float]] = {}
 
-    for c in sorted(set(labels)):
-        if c == -1:
-            continue  # skip noise by design
-
+    for c in clusters_to_emit:
         idxs: np.ndarray = np.where(labels == c)[0]
         cluster_sizes[int(c)] = int(len(idxs))
 
-        k: int = min(representative_abstracts, len(idxs))
+        k_rep: int = min(representative_abstracts, len(idxs))
 
         cluster_emb: np.ndarray = emb[idxs]
         centroid: np.ndarray = cluster_emb.mean(axis=0, keepdims=True)
+        centroid = centroid / (np.linalg.norm(centroid) + 1e-12)
 
-        sims: np.ndarray = cosine_similarity(cluster_emb, centroid).ravel()
-        top_local: np.ndarray = np.argsort(-sims)[:k]
+        sims: np.ndarray = (cluster_emb @ centroid.T).ravel()
+        top_local: np.ndarray = np.argsort(-sims)[:k_rep]
         top_idxs: np.ndarray = idxs[top_local]
 
         representatives[int(c)] = [texts[i] for i in top_idxs]
+        cluster_metrics[int(c)] = {
+            "coherence": float(coherence[c]),
+            "distinctiveness": float(distinctiveness[c]),
+            "score": float(score[c]),
+        }
 
     # -----------------------------
     # Save representatives for TopicGPT step
     # -----------------------------
     reps_path: str = os.path.join(save_dir, f"representatives_top{representative_abstracts}.txt")
     with open(reps_path, "w", encoding="utf-8") as f:
-        for c in sorted(representatives.keys()):
-            f.write(f"Cluster {c} (n={cluster_sizes[c]}):\n")
+        for c in clusters_to_emit:
+            f.write(
+                f"Cluster {c} (n={cluster_sizes[c]} | "
+                f"coh={cluster_metrics[c]['coherence']:.4f} | "
+                f"dist={cluster_metrics[c]['distinctiveness']:.4f} | "
+                f"score={cluster_metrics[c]['score']:.4f}):\n"
+            )
             for i, t in enumerate(representatives[c], 1):
                 f.write(f"  [{i}] {t}\n")
             f.write("\n")
     print("Saved representatives to:", reps_path)
 
-    return representatives, cluster_sizes
+    return representatives, cluster_sizes, cluster_metrics
 
 
-def run_topic_gpt(
-    topic_url: str,
-    model: str = "meta-llama/Llama-3.3-70B-Instruct",
-    temperature: float = 0.2,
-    representative_abstracts: int = 20,
-    out_root: str = os.path.join("out", "topics"),
-) -> dict[int, dict[str, Any]]:
+def run_topic_gpt(topic_url: str, model: str = "meta-llama/Llama-3.3-70B-Instruct", temperature: float = 0.2,
+                  representative_abstracts: int = 20, out_root: str = os.path.join("out", "topics")) \
+        -> dict[int, dict[str, Any]]:
     """
     Run TopicGPT labeling on clustered representative abstracts.
     Loads umbrella topic metadata (display_name + description) from data/openalex/topics.json.
@@ -297,13 +486,13 @@ def run_topic_gpt(
     :param temperature: Sampling temperature
     :param representative_abstracts: Number of reps per cluster (must match filename)
     :param out_root: Output root directory
-    :return: Dict mapping cluster_id -> TopicGPT result
+    :return: Dict mapping cluster_id -> TopicGPT result (includes cluster n)
     """
     # -----------------------------
     # Resolve topic_id and paths
     # -----------------------------
-    topic_url = topic_url.rstrip("/")  # CHANGED: normalize for matching
-    topic_id: str = topic_url.split("/")[-1]  # e.g. "T10346"
+    topic_url = topic_url.rstrip("/")
+    topic_id: str = topic_url.split("/")[-1]
     save_dir: str = os.path.join(out_root, topic_id)
 
     reps_path: str = os.path.join(save_dir, f"representatives_top{representative_abstracts}.txt")
@@ -316,8 +505,7 @@ def run_topic_gpt(
     topics_path: str = os.path.join("data", "openalex", "topics.json")
 
     if not os.path.exists(topics_path):
-        # Create it, then try again (local import avoids circular import issues)
-        from openalex import get_openalex_topics
+        from openalex import get_openalex_topics  # local import avoids circular imports
         get_openalex_topics()
         if not os.path.exists(topics_path):
             raise FileNotFoundError(
@@ -327,25 +515,20 @@ def run_topic_gpt(
     with open(topics_path, "r", encoding="utf-8") as f:
         topics_data = json.load(f)
 
-    # topics.json may be a list[dict] or dict[str, dict] depending on your pipeline.
     topic_obj: dict[str, Any] | None = None
 
     if isinstance(topics_data, list):
-        # Each element has e.g. {"id": "https://openalex.org/T10346", ...}
         for t in topics_data:
             if not isinstance(t, dict):
                 continue
             tid = str(t.get("id", "")).rstrip("/")
-            # CHANGED: also allow matching by plain topic_id if stored that way
             if tid == topic_url or tid.endswith(f"/{topic_id}") or tid == topic_id:
                 topic_obj = t
                 break
 
     elif isinstance(topics_data, dict):
-        # Could be keyed by topic_id or topic_url
         topic_obj = topics_data.get(topic_id) or topics_data.get(topic_url)
 
-        # Or could be {"results": [...]} depending on your fetch format
         if topic_obj is None and "results" in topics_data and isinstance(topics_data["results"], list):
             for t in topics_data["results"]:
                 if not isinstance(t, dict):
@@ -364,7 +547,6 @@ def run_topic_gpt(
     umbrella_display_name: str = str(topic_obj.get("display_name", "")).strip()
     umbrella_description: str = str(topic_obj.get("description", "")).strip()
 
-    # Umbrella metadata is REQUIRED for your prompt design
     if not umbrella_display_name or not umbrella_description:
         raise ValueError(
             f"Umbrella metadata missing for {topic_url}.\n"
@@ -373,28 +555,27 @@ def run_topic_gpt(
             f"Fix topics.json or refresh via get_openalex_topics()."
         )
 
-    # -----------------------------
-    # Parse representatives file
-    # -----------------------------
     clusters: dict[int, list[str]] = {}
+    cluster_n: dict[int, int] = {}
     current_cluster: int | None = None
 
-    header_re = re.compile(r"^Cluster\s+(\d+)\s+\(n=\d+\):")
-    rep_re = re.compile(r"^\s*\[\d+\]\s+(.*)$")
+    header_re = re.compile(r"^Cluster\s+(\d+)\s+\(n=(\d+)\):\s*$")
+    rep_re = re.compile(r"^\s*\[\d+\]\s+(.*\S)\s*$")
 
     with open(reps_path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.rstrip("\n")
+        for raw_line in f:
+            line = raw_line.rstrip("\n")
 
-            header = header_re.match(line)
-            if header:
-                current_cluster = int(header.group(1))
-                clusters[current_cluster] = []
+            m = header_re.match(line)
+            if m:
+                current_cluster = int(m.group(1))
+                cluster_n[current_cluster] = int(m.group(2))
+                clusters.setdefault(current_cluster, [])
                 continue
 
-            rep = rep_re.match(line)
-            if rep and current_cluster is not None:
-                clusters[current_cluster].append(rep.group(1))
+            m = rep_re.match(line)
+            if m and current_cluster is not None:
+                clusters[current_cluster].append(m.group(1))
 
     if not clusters:
         raise ValueError("No clusters found in representatives file.")
@@ -406,12 +587,15 @@ def run_topic_gpt(
 
     results: dict[int, dict[str, Any]] = {}
     for cluster_id in sorted(clusters):
-        results[cluster_id] = topic_gpt.label_cluster(
+        label = topic_gpt.label_cluster(
             cluster_id=cluster_id,
             abstracts=clusters[cluster_id],
             umbrella_display_name=umbrella_display_name,
             umbrella_description=umbrella_description,
         )
+        # Only include n in the result (cluster size from header)
+        label["n"] = cluster_n.get(cluster_id)
+        results[cluster_id] = label
 
     # -----------------------------
     # Save results
@@ -436,3 +620,138 @@ def run_topic_gpt(
 
     print("Saved TopicGPT labels to:", out_path)
     return results
+
+
+def select_topic_from_topicgpt(topic_url: str) -> tuple[int, dict]:
+    """
+    Select the final cluster/topic after TopicGPT labeling.
+
+    This function is intentionally file-driven: it resolves the topic-specific output
+    directory from the OpenAlex topic URL, then reads
+      - cluster scores from "cluster_scores.tsv" (produced by cluster_topic), and
+      - TopicGPT outputs from "topicgpt_labels.json" (produced by run_topic_gpt),
+    and selects the highest-scoring cluster among TopicGPT-labeled clusters whose
+    confidence is exactly "high".
+
+    Confidence thresholding is not parameterized here by design: only "high" is accepted.
+    If no "high" candidate exists, it falls back to the highest-scoring cluster that has
+    any TopicGPT output, and if that also fails, to the highest-scoring cluster overall.
+
+    :param topic_url: OpenAlex topic URL identifying the umbrella topic to process.
+    :return: (selected_cluster_id, selected_topicgpt_json)
+        - selected_cluster_id: Cluster id selected as final fine-grained topic.
+        - selected_topicgpt_json: TopicGPT label payload for the selected cluster (may be {} on fallback).
+    """
+    representative_abstracts: int = 20
+    out_root: str = os.path.join("out", "topics")
+
+    # -----------------------------
+    # Resolve topic_id and paths (aligned with run_topic_gpt)
+    # -----------------------------
+    topic_url = topic_url.rstrip("/")
+    topic_id: str = topic_url.split("/")[-1]
+    save_dir: str = os.path.join(out_root, topic_id)
+
+    # cluster scores
+    scores_path: str = os.path.join(save_dir, "cluster_scores.tsv")
+    if not os.path.exists(scores_path):
+        raise FileNotFoundError(f"Missing cluster scores file: {scores_path}")
+
+    # TopicGPT output
+    labels_path: str = os.path.join(save_dir, "topicgpt_labels.json")
+    if not os.path.exists(labels_path):
+        raise FileNotFoundError(f"Missing TopicGPT labels file: {labels_path}")
+
+    # Optional: ensure reps file exists for consistency/debugging (not strictly required for selection)
+    reps_path: str = os.path.join(save_dir, f"representatives_top{representative_abstracts}.txt")
+    if not os.path.exists(reps_path):
+        # Keep this as a warning-like behavior; selection can proceed without it.
+        # Raise if you want strict consistency:
+        # raise FileNotFoundError(f"Missing representatives file: {reps_path}")
+        pass
+
+    # -----------------------------
+    # Load cluster scores TSV
+    # -----------------------------
+    scores: dict[int, float] = {}
+    with open(scores_path, "r", encoding="utf-8") as f:
+        header = f.readline().strip().split("\t")
+        try:
+            cid_i = header.index("cluster_id")
+            score_i = header.index("score")
+        except ValueError as e:
+            raise ValueError(
+                f"cluster_scores.tsv must contain columns: cluster_id, score. Got: {header}"
+            ) from e
+
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split("\t")
+            try:
+                c = int(parts[cid_i])
+                s = float(parts[score_i])
+            except Exception:
+                continue
+            scores[c] = s
+
+    if not scores:
+        raise ValueError(f"No cluster scores found in: {scores_path}")
+
+    # -----------------------------
+    # Load TopicGPT outputs (run_topic_gpt format)
+    # -----------------------------
+    with open(labels_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    clusters_obj = data.get("clusters")
+    if not isinstance(clusters_obj, dict) or not clusters_obj:
+        raise ValueError(f"No 'clusters' found in TopicGPT labels file: {labels_path}")
+
+    topic_by_cluster: dict[int, dict] = {}
+    for k, v in clusters_obj.items():
+        try:
+            cid = int(k)
+        except Exception:
+            # Some pipelines may store keys as ints already; try that
+            if isinstance(k, int):
+                cid = k
+            else:
+                continue
+        if isinstance(v, dict):
+            topic_by_cluster[cid] = v
+
+    if not topic_by_cluster:
+        raise ValueError(f"No usable cluster payloads found in: {labels_path}")
+
+    # -----------------------------
+    # Selection: confidence == "high" only
+    # -----------------------------
+    high_candidates = [
+        c for c, payload in topic_by_cluster.items()
+        if isinstance(payload, dict) and str(payload.get("confidence", "")).lower() == "high"
+    ]
+
+    def _best_by_score(cands: list[int]) -> int | None:
+        cands_scored = [c for c in cands if c in scores]
+        if not cands_scored:
+            return None
+        return max(cands_scored, key=lambda c: scores[c])
+
+    selected_cluster = _best_by_score(high_candidates)
+
+    # Fallback 1: any TopicGPT output (regardless of confidence)
+    if selected_cluster is None:
+        selected_cluster = _best_by_score(list(topic_by_cluster.keys()))
+
+    # Fallback 2: best unsupervised overall (even without TopicGPT output)
+    if selected_cluster is None:
+        selected_cluster = max(scores.keys(), key=lambda c: scores[c])
+
+    selected_payload = topic_by_cluster.get(selected_cluster, {})
+    if not isinstance(selected_payload, dict):
+        selected_payload = {}
+
+    return int(selected_cluster), selected_payload
+

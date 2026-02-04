@@ -4,8 +4,7 @@ from experiments import run_task
 from analysis import calculate_biases
 from dataset import load_results, get_bias_values
 from openalex import get_openalex_topics, get_works_for_topic, load_topic_title_abstract
-from topic_clustering import cluster_topic, run_topic_gpt
-
+from topic_clustering import cluster_topic, run_topic_gpt, select_topic_from_topicgpt
 
 model = "meta-llama/Llama-3.3-70B-Instruct"
 # model = "meta-llama/Llama-4-Scout-17B-16E-Instruct"
@@ -34,19 +33,19 @@ bias = ("Publication-Year")
 #     biases = ["Country"]
 #     run_task(topic=topic, prompt=prompt, model=model, biases=biases, iterations=iterations)
 
-#oa_topics = get_openalex_topics()
+# oa_topics = get_openalex_topics()
 
 topic_url = "https://openalex.org/T10181"
-# cluster_topic(topic_url=topic_url, n=20000)
+cluster_topic(topic_url=topic_url, n=20000)
 labels = run_topic_gpt(topic_url)
+selected_cluster, selected_payload = select_topic_from_topicgpt(topic_url=topic_url)
 
 
 # topic_url = "https://openalex.org/T10764"
 # cluster_topic(topic_url=topic_url, n=20000)
-#
+
 # topic_url = "https://openalex.org/T12380"
 # cluster_topic(topic_url=topic_url, n=20000)
 
 # oa_works = get_works_for_topic(topic_url=topic_url, n=20000)
 # works = load_topic_title_abstract(topic_url=topic_url, n=20000)
-

@@ -43,13 +43,14 @@ class TopicGPT:
                       umbrella_description: str) -> dict[str, Any]:
         """
         Generate a TopicGPT label for one cluster.
+
         :param cluster_id: Cluster identifier
         :param abstracts: Representative abstracts for this cluster
         :param umbrella_display_name: OpenAlex umbrella topic display_name
         :param umbrella_description: OpenAlex umbrella topic description
         :return: Parsed TopicGPT JSON result (or fallback with raw_output)
         """
-        topic_lines = [
+        topic_lines: list[str] = [
             "Umbrella topic (OpenAlex display_name):",
             umbrella_display_name.strip(),
             "",
@@ -58,17 +59,51 @@ class TopicGPT:
             "",
             f"Cluster {cluster_id} representative abstracts:",
         ]
+
         for i, a in enumerate(abstracts, start=1):
             topic_lines.append(f"[{i}] {a.strip()}")
 
+        topic_text = "\n".join(topic_lines)
+
+        # --- First attempt ---
         answer, _ = self.llm.request(
             prompt=self.prompt,
-            topic="\n".join(topic_lines),
+            topic=topic_text,
             use_metadata=False,
             context_docs=None,
         )
 
         parsed = self._extract_json_topic(answer)
+
+        # --- Retry once if the model didn't follow the fenced output format ---
+        if parsed is None:
+            repair = (
+                "\n\nIMPORTANT: Your previous answer did not follow the required output format.\n"
+                "Return EXACTLY two fenced code blocks and nothing else:\n"
+                "1) ```json_topic\n"
+                "{\n"
+                '  \"topic_name\": \"...\",\n'
+                '  \"description\": \"...\",\n'
+                '  \"keywords\": [\"...\"],\n'
+                '  \"confidence\": \"high\" | \"medium\" | \"low\"\n'
+                "}\n"
+                "```\n"
+                "2) ```json\n"
+                "[]\n"
+                "```\n"
+                "Do NOT use markdown headings like '### json_topic' and do NOT add extra text."
+            )
+
+            answer2, _ = self.llm.request(
+                prompt=self.prompt,
+                topic=topic_text + repair,
+                use_metadata=False,
+                context_docs=None,
+            )
+            parsed = self._extract_json_topic(answer2)
+            if parsed is not None:
+                answer = answer2  # keep raw_output aligned with the successful attempt
+
         if parsed is not None:
             parsed.setdefault("topic_name", "")
             parsed.setdefault("description", "")
