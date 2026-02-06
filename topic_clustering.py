@@ -1,6 +1,9 @@
 import os
+import random
 import re
 import json
+from collections import defaultdict
+
 import torch
 import numpy as np
 import umap
@@ -12,7 +15,7 @@ import hdbscan
 from typing import Any
 
 from llm.topic_gpt import TopicGPT
-from openalex import load_topic_title_abstract
+from openalex import load_topic_title_abstract, get_openalex_topics
 
 # -----------------------------
 # Helpers: cleaning + stopwords
@@ -201,9 +204,109 @@ def _cluster_scores_from_embeddings(emb: np.ndarray, labels: np.ndarray) -> tupl
     return coherence, distinctiveness, score
 
 
+def select_openalex_topics(n: int = 25, random_state: int = 42) -> dict[str, list[str]]:
+    """
+    Select OpenAlex topic URLs stratified by OpenAlex field.
+
+    Loads all available OpenAlex topics via get_openalex_topics() and groups them by
+    topic["field"]["display_name"]. For each field, selects up to n topic ids uniformly
+    at random using the provided random_state.
+
+    The selected topics are persisted to disk under
+    data/openalex/selected_topics.json for reproducibility. If the file already exists
+    with matching parameters (n_per_field and random_state), the stored selection is
+    loaded and returned. Otherwise, the file is overwritten.
+
+    :param n: Number of topics to sample per field (upper bound; fields with fewer topics return all).
+    :param random_state: Random seed for deterministic sampling.
+    :return: Dict mapping field_display_name -> list of topic ids (OpenAlex URLs).
+    """
+    out_dir = os.path.join("data", "openalex")
+    out_path = os.path.join(out_dir, "selected_topics.json")
+
+    # -----------------------------
+    # Fast path: load existing selection if parameters match
+    # -----------------------------
+    if os.path.exists(out_path):
+        try:
+            with open(out_path, "r", encoding="utf-8") as f:
+                existing = json.load(f)
+            if (
+                isinstance(existing, dict)
+                and existing.get("n_per_field") == int(n)
+                and existing.get("random_state") == int(random_state)
+                and isinstance(existing.get("fields"), dict)
+            ):
+                return existing["fields"]
+        except Exception:
+            # Fall through to recomputation
+            pass
+
+    # -----------------------------
+    # Load all OpenAlex topics
+    # -----------------------------
+    oa_topics: list[dict[str, Any]] = get_openalex_topics()
+    if not isinstance(oa_topics, list) or not oa_topics:
+        return {}
+
+    topics_by_field: dict[str, list[str]] = defaultdict(list)
+
+    for t in oa_topics:
+        if not isinstance(t, dict):
+            continue
+
+        topic_id = t.get("id")
+        field = t.get("field")
+
+        if not isinstance(topic_id, str) or not topic_id.strip():
+            continue
+        if not isinstance(field, dict):
+            continue
+
+        field_name = field.get("display_name")
+        if not isinstance(field_name, str) or not field_name.strip():
+            continue
+
+        topics_by_field[field_name.strip()].append(topic_id.strip())
+
+    # -----------------------------
+    # Deterministic sampling per field
+    # -----------------------------
+    rng = random.Random(random_state)
+
+    selected: dict[str, list[str]] = {}
+    for field_name in sorted(topics_by_field.keys()):
+        ids = topics_by_field[field_name]
+        if not ids:
+            continue
+
+        ids = list(ids)
+        rng.shuffle(ids)
+        selected[field_name] = ids[: min(int(n), len(ids))]
+
+    # -----------------------------
+    # Persist (overwrite) selection
+    # -----------------------------
+    os.makedirs(out_dir, exist_ok=True)
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "n_per_field": int(n),
+                "random_state": int(random_state),
+                "fields": selected,
+            },
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
+
+    print("Saved selected OpenAlex topics to:", out_path)
+
+    return selected
+
+
 def cluster_topic(
         topic_url: str,
-        n: int = 20000,
         representative_abstracts: int = 20,
         random_state: int = 42,
         return_all_clusters: bool = False,
@@ -223,7 +326,6 @@ def cluster_topic(
     are chosen as the most central documents within each returned cluster.
 
     :param topic_url: OpenAlex topic URL identifying the umbrella topic to process.
-    :param n: Maximum number of papers to load from the topic.
     :param representative_abstracts: Number of representative abstracts to return per cluster.
     :param random_state: Random seed for reproducible UMAP projection and clustering.
     :param return_all_clusters: Whether to return representative abstracts for all clusters.
@@ -248,12 +350,12 @@ def cluster_topic(
     embedding_model_name: str = "allenai/specter2_base"
     batch_size: int = 32
 
-    hdb_min_cluster_size: int = 100
-    hdb_selection_method: str = "leaf"
-    umap_n_components: int = 5
-    umap_n_neighbors: int = 20
+    hdb_min_cluster_size: int = 40
+    hdb_selection_method: str = "eom"
+    umap_n_components: int = 10
+    umap_n_neighbors: int = 15
     umap_min_dist: float = 0.0
-    hdb_min_samples: int = 10
+    hdb_min_samples: int = 5
 
     # -----------------------------
     # Helpers
@@ -327,7 +429,7 @@ def cluster_topic(
     save_dir: str = os.path.join(out_root, topic_id)
     os.makedirs(save_dir, exist_ok=True)
 
-    texts: list[str] = load_topic_title_abstract(topic_url, n=n)
+    texts: list[str] = load_topic_title_abstract(topic_url)
     if not texts:
         print("No papers loaded.")
         return {}, {}, {}
@@ -555,11 +657,45 @@ def run_topic_gpt(topic_url: str, model: str = "meta-llama/Llama-3.3-70B-Instruc
             f"Fix topics.json or refresh via get_openalex_topics()."
         )
 
+    # -----------------------------
+    # Load cluster metrics (coh/dist/score) from cluster_scores.tsv (if present)
+    # -----------------------------
+    metrics_by_cluster: dict[int, dict[str, float]] = {}
+    scores_path: str = os.path.join(save_dir, "cluster_scores.tsv")
+    if os.path.exists(scores_path):
+        with open(scores_path, "r", encoding="utf-8") as f:
+            header = f.readline().strip().split("\t")
+            try:
+                cid_i = header.index("cluster_id")
+                coh_i = header.index("coherence")
+                dist_i = header.index("distinctiveness")
+                score_i = header.index("score")
+            except ValueError as e:
+                raise ValueError(
+                    f"cluster_scores.tsv must contain columns: cluster_id, coherence, distinctiveness, score. Got: {header}"
+                ) from e
+
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                parts = line.split("\t")
+                try:
+                    cid = int(parts[cid_i])
+                    metrics_by_cluster[cid] = {
+                        "coherence": float(parts[coh_i]),
+                        "distinctiveness": float(parts[dist_i]),
+                        "score": float(parts[score_i]),
+                    }
+                except Exception:
+                    continue
+
     clusters: dict[int, list[str]] = {}
     cluster_n: dict[int, int] = {}
     current_cluster: int | None = None
 
-    header_re = re.compile(r"^Cluster\s+(\d+)\s+\(n=(\d+)\):\s*$")
+    # UPDATED: allow optional extra fields in header, e.g. "(n=159 | coh=... | dist=... | score=...):"
+    header_re = re.compile(r"^Cluster\s+(\d+)\s+\(n=(\d+)(?:\s+\|\s+[^)]*)?\):\s*$")
     rep_re = re.compile(r"^\s*\[\d+\]\s+(.*\S)\s*$")
 
     with open(reps_path, "r", encoding="utf-8") as f:
@@ -595,6 +731,11 @@ def run_topic_gpt(topic_url: str, model: str = "meta-llama/Llama-3.3-70B-Instruc
         )
         # Only include n in the result (cluster size from header)
         label["n"] = cluster_n.get(cluster_id)
+
+        # NEW: attach unsupervised metrics if available
+        if cluster_id in metrics_by_cluster:
+            label.update(metrics_by_cluster[cluster_id])
+
         results[cluster_id] = label
 
     # -----------------------------
