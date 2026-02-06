@@ -33,10 +33,11 @@ iterations = 1
 #     biases = ["Country"]
 #     run_task(topic=topic, prompt=prompt, model=model, biases=biases, iterations=iterations)
 
-#oa_topics = get_openalex_topics()
-# topics = select_openalex_topics(n=20)
+oa_topics = get_openalex_topics()
 
-topic_url = "https://openalex.org/T13760"
+topics = select_openalex_topics(n=20)
+
+topic_url = "https://openalex.org/T10595"
 get_works_for_topic(topic_url=topic_url, n=5000)
 cluster_topic(topic_url=topic_url)
 labels = run_topic_gpt(topic_url)
@@ -44,7 +45,6 @@ selected_cluster, selected_payload = select_topic_from_topicgpt(topic_url=topic_
 print(selected_cluster)
 print(selected_payload)
 
-# TODO add filtering process in OpenAlex API call -> always 5000 papers (currently after filtering also 600)
 
 # topic_url = "https://openalex.org/T10181"
 # cluster_topic(topic_url=topic_url, n=20000)

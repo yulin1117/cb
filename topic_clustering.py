@@ -2,6 +2,7 @@ import os
 import random
 import re
 import json
+import csv
 from collections import defaultdict
 
 import torch
@@ -15,7 +16,7 @@ import hdbscan
 from typing import Any
 
 from llm.topic_gpt import TopicGPT
-from openalex import load_topic_title_abstract, get_openalex_topics
+from openalex import load_topic_title_abstract, get_openalex_topics, get_works_for_topic
 
 # -----------------------------
 # Helpers: cleaning + stopwords
@@ -340,7 +341,6 @@ def cluster_topic(
         - representatives: dict[int, list[str]] mapping cluster_id to representative abstracts.
         - cluster_sizes: dict[int, int] mapping cluster_id to the number of papers in each returned cluster.
         - cluster_metrics: dict[int, dict[str, float]] mapping cluster_id to coherence/distinctiveness/score.
-
     """
     out_root: str = os.path.join("out", "topics")
 
@@ -350,8 +350,8 @@ def cluster_topic(
     embedding_model_name: str = "allenai/specter2_base"
     batch_size: int = 32
 
-    hdb_min_cluster_size: int = 40
-    hdb_selection_method: str = "eom"
+    hdb_min_cluster_size: int = 50
+    hdb_selection_method: str = "leaf"
     umap_n_components: int = 10
     umap_n_neighbors: int = 15
     umap_min_dist: float = 0.0
@@ -774,6 +774,10 @@ def select_topic_from_topicgpt(topic_url: str) -> tuple[int, dict]:
     and selects the highest-scoring cluster among TopicGPT-labeled clusters whose
     confidence is exactly "high".
 
+    If multiple clusters receive an identical TopicGPT topic_name (after normalization),
+    only the highest-scoring cluster per topic_name is kept for selection (deduplication
+    is applied within the "high" candidate pool).
+
     Confidence thresholding is not parameterized here by design: only "high" is accepted.
     If no "high" candidate exists, it falls back to the highest-scoring cluster that has
     any TopicGPT output, and if that also fails, to the highest-scoring cluster overall.
@@ -806,9 +810,6 @@ def select_topic_from_topicgpt(topic_url: str) -> tuple[int, dict]:
     # Optional: ensure reps file exists for consistency/debugging (not strictly required for selection)
     reps_path: str = os.path.join(save_dir, f"representatives_top{representative_abstracts}.txt")
     if not os.path.exists(reps_path):
-        # Keep this as a warning-like behavior; selection can proceed without it.
-        # Raise if you want strict consistency:
-        # raise FileNotFoundError(f"Missing representatives file: {reps_path}")
         pass
 
     # -----------------------------
@@ -855,7 +856,6 @@ def select_topic_from_topicgpt(topic_url: str) -> tuple[int, dict]:
         try:
             cid = int(k)
         except Exception:
-            # Some pipelines may store keys as ints already; try that
             if isinstance(k, int):
                 cid = k
             else:
@@ -867,7 +867,7 @@ def select_topic_from_topicgpt(topic_url: str) -> tuple[int, dict]:
         raise ValueError(f"No usable cluster payloads found in: {labels_path}")
 
     # -----------------------------
-    # Selection: confidence == "high" only
+    # Selection: confidence == "high" only (with topic_name dedup)
     # -----------------------------
     high_candidates = [
         c for c, payload in topic_by_cluster.items()
@@ -880,7 +880,29 @@ def select_topic_from_topicgpt(topic_url: str) -> tuple[int, dict]:
             return None
         return max(cands_scored, key=lambda c: scores[c])
 
-    selected_cluster = _best_by_score(high_candidates)
+    def _norm_topic_name(x) -> str:
+        # Normalize for exact-string collisions: lowercase, strip, collapse whitespace
+        return " ".join(str(x).strip().lower().split())
+
+    # Keep only the highest-scoring cluster per normalized topic_name among high candidates
+    best_cluster_per_name: dict[str, int] = {}
+    for c in high_candidates:
+        if c not in scores:
+            continue
+        payload = topic_by_cluster.get(c, {})
+        name = _norm_topic_name(payload.get("topic_name", ""))
+
+        # If no usable name, keep it unique so we don't accidentally collapse unrelated clusters
+        if not name:
+            name = f"__missing_name__:{c}"
+
+        prev = best_cluster_per_name.get(name)
+        if prev is None or scores[c] > scores.get(prev, float("-inf")):
+            best_cluster_per_name[name] = c
+
+    high_candidates_deduped = list(best_cluster_per_name.values())
+
+    selected_cluster = _best_by_score(high_candidates_deduped)
 
     # Fallback 1: any TopicGPT output (regardless of confidence)
     if selected_cluster is None:
@@ -896,3 +918,155 @@ def select_topic_from_topicgpt(topic_url: str) -> tuple[int, dict]:
 
     return int(selected_cluster), selected_payload
 
+
+def create_openalex_dataset(n_per_field: int = 20, works_n: int = 5000, random_state: int = 4):
+    """
+    Create the OpenAlex-based benchmark dataset by running:
+      - topic selection (stratified by field),
+      - work retrieval (cached),
+      - clustering,
+      - TopicGPT labeling,
+      - final cluster selection (confidence=="high", dedup by identical topic_name, then best score).
+
+    Stores a CSV with columns:
+      - Topic (ours)            -> TopicGPT selected topic_name
+      - Description (ours)      -> TopicGPT selected description
+      - OpenAlex-Topic          -> "<openalex_display_name> (<topic_id>)"
+      - Field                  -> "<field_display_name> (<field_id>)"
+
+    :param n_per_field: number of OpenAlex topics sampled per field
+    :param works_n: number of complete works to retrieve per topic (get_works_for_topic handles top-up)
+    :param random_state: random seed used for topic selection + work sampling
+    """
+    out_csv: str = os.path.join("data", "openalex", "openalex_dataset.csv")
+    os.makedirs(os.path.dirname(out_csv), exist_ok=True)
+
+    # -----------------------------
+    # Select OpenAlex topics (stratified by field)
+    # -----------------------------
+    topics_by_field: dict[str, list[str]] = select_openalex_topics(n=n_per_field, random_state=random_state)
+
+    # Flatten topic URLs
+    topic_urls: list[str] = []
+    for _field_name, topic_ids in topics_by_field.items():
+        for tid in topic_ids:
+            tid = str(tid).strip()
+            if not tid:
+                continue
+            # allow either full URL or bare id
+            if tid.startswith("http"):
+                topic_urls.append(tid.rstrip("/"))
+            else:
+                topic_urls.append(f"https://openalex.org/{tid}".rstrip("/"))
+
+    if not topic_urls:
+        print("No topics selected.")
+        return
+
+    # -----------------------------
+    # Load OpenAlex topic metadata for name + field (id/name)
+    # -----------------------------
+    oa_topics: list[dict[str, Any]] = get_openalex_topics()
+    topic_meta_by_id: dict[str, dict[str, Any]] = {}
+
+    for t in oa_topics:
+        if not isinstance(t, dict):
+            continue
+        tid = str(t.get("id", "")).rstrip("/")
+        if not tid:
+            continue
+        topic_meta_by_id[tid] = t
+        # also index by bare id (Txxxxx) for convenience
+        topic_meta_by_id[tid.split("/")[-1]] = t
+
+    # -----------------------------
+    # Prepare CSV writer
+    # -----------------------------
+    rows: list[dict[str, str]] = []
+
+    total = len(topic_urls)
+    for i, topic_url in enumerate(topic_urls, 1):
+        topic_url = topic_url.rstrip("/")
+        topic_id = topic_url.split("/")[-1]
+
+        print(f"\n[{i}/{total}] Processing topic {topic_id} ...")
+
+        # Metadata lookup
+        meta = topic_meta_by_id.get(topic_url) or topic_meta_by_id.get(topic_id) or {}
+        oa_display_name = str(meta.get("display_name", "")).strip() or topic_id
+
+        field_obj = meta.get("field") if isinstance(meta, dict) else None
+        field_id = ""
+        field_name = ""
+        if isinstance(field_obj, dict):
+            field_id = str(field_obj.get("id", "")).strip()
+            field_name = str(field_obj.get("display_name", "")).strip()
+
+        # Format as requested: name + id
+        openalex_topic_str = f"{oa_display_name} ({topic_id})"
+        if field_name and field_id:
+            field_str = f"{field_name} ({field_id.split('/')[-1]})"
+        elif field_name:
+            field_str = field_name
+        elif field_id:
+            field_str = field_id
+        else:
+            field_str = ""
+
+        # -----------------------------
+        # Run pipeline (with safety)
+        # -----------------------------
+        try:
+            get_works_for_topic(topic_url=topic_url, n=works_n, random_state=random_state)
+        except Exception as e:
+            print(f"  [ERROR] get_works_for_topic failed for {topic_id}: {e}")
+            continue
+
+        try:
+            cluster_topic(topic_url=topic_url)
+        except Exception as e:
+            print(f"  [ERROR] cluster_topic failed for {topic_id}: {e}")
+            continue
+
+        try:
+            _labels = run_topic_gpt(topic_url=topic_url)
+        except Exception as e:
+            print(f"  [ERROR] run_topic_gpt failed for {topic_id}: {e}")
+            continue
+
+        try:
+            selected_cluster, selected_payload = select_topic_from_topicgpt(topic_url=topic_url)
+        except Exception as e:
+            print(f"  [ERROR] select_topic_from_topicgpt failed for {topic_id}: {e}")
+            continue
+
+        ours_topic = str(selected_payload.get("topic_name", "")).strip()
+        ours_desc = str(selected_payload.get("description", "")).strip()
+
+        if not ours_topic:
+            # Keep a traceable fallback rather than silently writing empty
+            ours_topic = f"(missing topic_name) cluster={selected_cluster}"
+
+        rows.append({
+            "Topic": ours_topic,
+            "Description": ours_desc,
+            "OpenAlex-Topic": openalex_topic_str,
+            "Field": field_str,
+        })
+
+        print(f"  Selected cluster {selected_cluster}: {ours_topic}")
+
+    # -----------------------------
+    # Write CSV
+    # -----------------------------
+    with open(out_csv, "w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=["Topic", "Description", "OpenAlex-Topic", "Field"],
+            quoting=csv.QUOTE_MINIMAL,
+        )
+        writer.writeheader()
+        for r in rows:
+            writer.writerow(r)
+
+    print(f"\nSaved dataset CSV with {len(rows)} rows to: {out_csv}")
