@@ -33,17 +33,19 @@ iterations = 1
 #     biases = ["Country"]
 #     run_task(topic=topic, prompt=prompt, model=model, biases=biases, iterations=iterations)
 
-oa_topics = get_openalex_topics()
+# oa_topics = get_openalex_topics()
 
-topics = select_openalex_topics(n=20)
+# topics = select_openalex_topics(n=10)
 
 topic_url = "https://openalex.org/T10595"
-get_works_for_topic(topic_url=topic_url, n=5000)
-cluster_topic(topic_url=topic_url)
+# get_works_for_topic(topic_url=topic_url, n=5000)
+# cluster_topic(topic_url=topic_url)
 labels = run_topic_gpt(topic_url)
 selected_cluster, selected_payload = select_topic_from_topicgpt(topic_url=topic_url)
 print(selected_cluster)
 print(selected_payload)
+
+# TODO: Adjust position bias mitigation -> from 20 runs to 5 runs -> queue +4 with seeded random shuffle per run -> ensure 1-4, 5-8, 9-12, 13-16, 17-20
 
 
 # topic_url = "https://openalex.org/T10181"

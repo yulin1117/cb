@@ -348,20 +348,15 @@ def get_works_for_topic_reservoir_sampling(topic_url, n=10000):
 
 def load_topic_title_abstract(topic_url):
     """
-    Loads works via get_works_for_topic, keeps only allowed types, English-only,
-    rebuilds abstract safely, removes papers with missing title/abstract,
-    and returns combined 'Title. Abstract' strings.
-    """
+    Loads works via get_works_for_topic, rebuilds abstracts safely, and returns
+    a list of dictionaries with OpenAlex ID and combined text.
 
-    ALLOWED_TYPES = {
-        "article",
-        "book-chapter",
-        "preprint",
-        "dissertation",
-        "book",
-        "review",
-        "report",
-    }
+    Filtering by type/language/title/abstract/length is intentionally NOT done here,
+    because get_works_for_topic() already enforces the same screening criteria.
+
+    NOTE: If texts appear lowercased later, this is caused by _normalize_text()
+    in cluster_topic(), not by this loader.
+    """
 
     def reconstruct_abstract(abstract_inverted_index):
         """Safely rebuild abstract from OpenAlex abstract_inverted_index."""
@@ -396,21 +391,18 @@ def load_topic_title_abstract(topic_url):
         return text if text.strip() else None
 
     raw_works = get_works_for_topic(topic_url=topic_url)
-    cleaned_papers = []
+
+    papers: list[dict[str, str]] = []
 
     for w in raw_works:
-
-        # Filter by allowed type
-        if w.get("type") not in ALLOWED_TYPES:
+        if not isinstance(w, dict):
             continue
 
-        # English only
-        if w.get("language") != "en":
-            continue
-
+        work_id = w.get("id")
         title = w.get("title")
         inv = w.get("abstract_inverted_index")
-        if not title or not inv:
+
+        if not work_id or not title or not inv:
             continue
 
         abstract = reconstruct_abstract(inv)
@@ -419,10 +411,12 @@ def load_topic_title_abstract(topic_url):
 
         combined = f"{title}. {abstract}"
 
-        # Length filter
-        if len(combined) < 500:
-            continue
+        papers.append({
+            "id": str(work_id),
+            "title": title,
+            "abstract": abstract,
+            "text": combined
+        })
 
-        cleaned_papers.append(combined)
+    return papers
 
-    return cleaned_papers

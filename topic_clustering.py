@@ -314,7 +314,7 @@ def cluster_topic(
         size_cap: int = 2000,
         distinct_top_k: int = 1,
         top_k_candidates: int = 10,
-) -> tuple[dict[int, list[str]], dict[int, int], dict[int, dict[str, float]]]:
+) -> tuple[dict[int, list[dict[str, str]]], dict[int, int], dict[int, dict[str, float]]]:
     """
     Cluster scientific abstracts for an OpenAlex topic and return representative abstracts.
 
@@ -323,8 +323,11 @@ def cluster_topic(
     original embedding space. Unlike an early-selection pipeline, this method does not need to
     commit to a single cluster before downstream labeling: it can return either (a) all clusters
     or (b) a top-K set of candidate clusters ranked by the unsupervised score, enabling final
-    selection after TopicGPT (e.g., using an LLM confidence threshold). Representative abstracts
-    are chosen as the most central documents within each returned cluster.
+    selection after TopicGPT (e.g., using an LLM confidence threshold).
+
+    Representative abstracts are chosen from each returned cluster using MMR (Maximal Marginal
+    Relevance) diversity sampling on a centroid-relevance candidate pool. This reduces redundancy
+    among representatives while keeping them highly on-topic.
 
     :param topic_url: OpenAlex topic URL identifying the umbrella topic to process.
     :param representative_abstracts: Number of representative abstracts to return per cluster.
@@ -338,7 +341,8 @@ def cluster_topic(
     :param top_k_candidates: Number of highest-scoring clusters to return when
         return_all_clusters is False.
     :return: (representatives, cluster_sizes, cluster_metrics)
-        - representatives: dict[int, list[str]] mapping cluster_id to representative abstracts.
+        - representatives: dict[int, list[dict]] mapping cluster_id to representative paper dicts
+          with at least {"id": ..., "text": ...}.
         - cluster_sizes: dict[int, int] mapping cluster_id to the number of papers in each returned cluster.
         - cluster_metrics: dict[int, dict[str, float]] mapping cluster_id to coherence/distinctiveness/score.
     """
@@ -356,6 +360,11 @@ def cluster_topic(
     umap_n_neighbors: int = 15
     umap_min_dist: float = 0.0
     hdb_min_samples: int = 5
+
+    # MMR selection hyperparameters
+    mmr_lambda: float = 0.7
+    mmr_pool_min: int = 50
+    mmr_pool_mult: int = 5
 
     # -----------------------------
     # Helpers
@@ -422,19 +431,87 @@ def cluster_topic(
 
         return coherence, distinctiveness, score
 
+    def _mmr_select(
+            cand_emb: np.ndarray,
+            cand_rel: np.ndarray,
+            k: int,
+            lam: float = 0.7,
+    ) -> np.ndarray:
+        """
+        Maximal Marginal Relevance selection on a candidate pool.
+
+        :param cand_emb: (L, d) L2-normalized embeddings (cosine = dot)
+        :param cand_rel: (L,) relevance scores (e.g., cosine to centroid)
+        :param k: number to select
+        :param lam: relevance vs diversity tradeoff (0..1); higher = more relevance
+        :return: indices into cand_emb of selected items (length k)
+        """
+        L = int(cand_emb.shape[0])
+        if L == 0:
+            return np.array([], dtype=int)
+
+        k = min(int(k), L)
+        cand_rel = np.asarray(cand_rel).ravel()
+
+        # Similarity among candidates (cosine, since normalized)
+        sim_mat = cand_emb @ cand_emb.T  # (L, L)
+
+        selected: list[int] = []
+        first = int(np.argmax(cand_rel))
+        selected.append(first)
+
+        remaining = set(range(L))
+        remaining.remove(first)
+
+        while len(selected) < k and remaining:
+            best_i = None
+            best_score = -1e18
+
+            for i in remaining:
+                redundancy = float(np.max(sim_mat[i, selected])) if selected else 0.0
+                mmr = float(lam * cand_rel[i] - (1.0 - lam) * redundancy)
+                if mmr > best_score:
+                    best_score = mmr
+                    best_i = i
+
+            if best_i is None:
+                break
+
+            selected.append(int(best_i))
+            remaining.remove(int(best_i))
+
+        return np.array(selected, dtype=int)
+
     # -----------------------------
-    # Load texts
+    # Load papers (id + text)
     # -----------------------------
     topic_id: str = topic_url.rstrip("/").split("/")[-1]
     save_dir: str = os.path.join(out_root, topic_id)
     os.makedirs(save_dir, exist_ok=True)
 
-    texts: list[str] = load_topic_title_abstract(topic_url)
-    if not texts:
+    papers: list[dict[str, str]] = load_topic_title_abstract(topic_url)
+    if not papers:
         print("No papers loaded.")
         return {}, {}, {}
 
-    texts = [_normalize_text(t) for t in texts]
+    # Extract ids and texts; keep original dicts aligned by index
+    paper_ids: list[str] = [str(p.get("id", "")) for p in papers]
+    texts_raw: list[str] = [str(p.get("text", "")) for p in papers]
+
+    # Defensive: drop empty id/text rows (should be rare if upstream screening is correct)
+    keep = [i for i, (pid, txt) in enumerate(zip(paper_ids, texts_raw)) if pid and txt]
+    if len(keep) != len(papers):
+        papers = [papers[i] for i in keep]
+        paper_ids = [paper_ids[i] for i in keep]
+        texts_raw = [texts_raw[i] for i in keep]
+
+    if not papers:
+        print("No usable papers after id/text validation.")
+        return {}, {}, {}
+
+    # NOTE: lowercasing, if any, happens here via _normalize_text
+    texts: list[str] = [_normalize_text(t) for t in texts_raw]
+
     print(f"Loaded {len(texts)} papers. Computing embeddings ({embedding_model_name})...")
 
     # -----------------------------
@@ -528,9 +605,9 @@ def cluster_topic(
               f"(top_k_candidates={k}).")
 
     # -----------------------------
-    # Pick representative abstracts per returned cluster
+    # Pick representative papers per returned cluster (MMR)
     # -----------------------------
-    representatives: dict[int, list[str]] = {}
+    representatives: dict[int, list[dict[str, str]]] = {}
     cluster_sizes: dict[int, int] = {}
     cluster_metrics: dict[int, dict[str, float]] = {}
 
@@ -539,16 +616,36 @@ def cluster_topic(
         cluster_sizes[int(c)] = int(len(idxs))
 
         k_rep: int = min(representative_abstracts, len(idxs))
+        if k_rep <= 0:
+            continue
 
-        cluster_emb: np.ndarray = emb[idxs]
+        cluster_emb: np.ndarray = emb[idxs]  # normalized
         centroid: np.ndarray = cluster_emb.mean(axis=0, keepdims=True)
         centroid = centroid / (np.linalg.norm(centroid) + 1e-12)
 
-        sims: np.ndarray = (cluster_emb @ centroid.T).ravel()
-        top_local: np.ndarray = np.argsort(-sims)[:k_rep]
-        top_idxs: np.ndarray = idxs[top_local]
+        sims: np.ndarray = (cluster_emb @ centroid.T).ravel()  # relevance to centroid
 
-        representatives[int(c)] = [texts[i] for i in top_idxs]
+        # Candidate pool: top-L by centroid similarity, then MMR downselect to k_rep
+        L = min(len(idxs), max(mmr_pool_min, mmr_pool_mult * k_rep))
+        cand_local = np.argsort(-sims)[:L]           # indices into cluster_emb (local)
+        cand_emb = cluster_emb[cand_local]           # (L, d)
+        cand_rel = sims[cand_local]                  # (L,)
+
+        mmr_local = _mmr_select(cand_emb, cand_rel, k_rep, lam=mmr_lambda)
+
+        # Map back to global indices into `papers`
+        top_global_idxs: np.ndarray = idxs[cand_local[mmr_local]]
+
+        # Store representative paper dicts (id + raw/original fields)
+        reps_list: list[dict[str, str]] = []
+        for gi in top_global_idxs:
+            p = papers[int(gi)]
+            reps_list.append({
+                "id": str(p.get("id", "")),
+                "text": str(p.get("text", "")),
+            })
+
+        representatives[int(c)] = reps_list
         cluster_metrics[int(c)] = {
             "coherence": float(coherence[c]),
             "distinctiveness": float(distinctiveness[c]),
@@ -556,21 +653,30 @@ def cluster_topic(
         }
 
     # -----------------------------
-    # Save representatives for TopicGPT step
+    # Save representatives (JSON only) for TopicGPT step
     # -----------------------------
-    reps_path: str = os.path.join(save_dir, f"representatives_top{representative_abstracts}.txt")
-    with open(reps_path, "w", encoding="utf-8") as f:
-        for c in clusters_to_emit:
-            f.write(
-                f"Cluster {c} (n={cluster_sizes[c]} | "
-                f"coh={cluster_metrics[c]['coherence']:.4f} | "
-                f"dist={cluster_metrics[c]['distinctiveness']:.4f} | "
-                f"score={cluster_metrics[c]['score']:.4f}):\n"
-            )
-            for i, t in enumerate(representatives[c], 1):
-                f.write(f"  [{i}] {t}\n")
-            f.write("\n")
-    print("Saved representatives to:", reps_path)
+    reps_json_path: str = os.path.join(save_dir, f"representatives_top{representative_abstracts}.json")
+    with open(reps_json_path, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "topic_id": topic_id,
+                "topic_url": topic_url.rstrip("/"),
+                "representative_abstracts": representative_abstracts,
+                "clusters": {
+                    str(c): {
+                        "n": cluster_sizes.get(c),
+                        "metrics": cluster_metrics.get(c, {}),
+                        "papers": representatives.get(c, []),
+                    }
+                    for c in clusters_to_emit
+                    if c in representatives
+                },
+            },
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
+    print("Saved representatives JSON to:", reps_json_path)
 
     return representatives, cluster_sizes, cluster_metrics
 
@@ -597,7 +703,8 @@ def run_topic_gpt(topic_url: str, model: str = "meta-llama/Llama-3.3-70B-Instruc
     topic_id: str = topic_url.split("/")[-1]
     save_dir: str = os.path.join(out_root, topic_id)
 
-    reps_path: str = os.path.join(save_dir, f"representatives_top{representative_abstracts}.txt")
+    # UPDATED: load JSON representatives instead of TXT
+    reps_path: str = os.path.join(save_dir, f"representatives_top{representative_abstracts}.json")
     if not os.path.exists(reps_path):
         raise FileNotFoundError(f"Missing representatives file: {reps_path}")
 
@@ -690,31 +797,52 @@ def run_topic_gpt(topic_url: str, model: str = "meta-llama/Llama-3.3-70B-Instruc
                 except Exception:
                     continue
 
+    # -----------------------------
+    # Load representatives from JSON
+    # -----------------------------
+    with open(reps_path, "r", encoding="utf-8") as f:
+        reps_data = json.load(f)
+
+    clusters_obj = reps_data.get("clusters", {})
+    if not isinstance(clusters_obj, dict) or not clusters_obj:
+        raise ValueError("No clusters found in representatives JSON file.")
+
     clusters: dict[int, list[str]] = {}
     cluster_n: dict[int, int] = {}
-    current_cluster: int | None = None
 
-    # UPDATED: allow optional extra fields in header, e.g. "(n=159 | coh=... | dist=... | score=...):"
-    header_re = re.compile(r"^Cluster\s+(\d+)\s+\(n=(\d+)(?:\s+\|\s+[^)]*)?\):\s*$")
-    rep_re = re.compile(r"^\s*\[\d+\]\s+(.*\S)\s*$")
+    for cid_str, cdata in clusters_obj.items():
+        try:
+            cid = int(cid_str)
+        except Exception:
+            continue
 
-    with open(reps_path, "r", encoding="utf-8") as f:
-        for raw_line in f:
-            line = raw_line.rstrip("\n")
+        if not isinstance(cdata, dict):
+            continue
 
-            m = header_re.match(line)
-            if m:
-                current_cluster = int(m.group(1))
-                cluster_n[current_cluster] = int(m.group(2))
-                clusters.setdefault(current_cluster, [])
+        n_val = cdata.get("n")
+        try:
+            cluster_n[cid] = int(n_val) if n_val is not None else None
+        except Exception:
+            cluster_n[cid] = None
+
+        papers = cdata.get("papers", [])
+        if not isinstance(papers, list) or not papers:
+            continue
+
+        # TopicGPT expects a list[str]; keep the exact same textual payload as before.
+        abstracts_for_llm: list[str] = []
+        for p in papers:
+            if not isinstance(p, dict):
                 continue
+            txt = str(p.get("text", "")).strip()
+            if txt:
+                abstracts_for_llm.append(txt)
 
-            m = rep_re.match(line)
-            if m and current_cluster is not None:
-                clusters[current_cluster].append(m.group(1))
+        if abstracts_for_llm:
+            clusters[cid] = abstracts_for_llm
 
     if not clusters:
-        raise ValueError("No clusters found in representatives file.")
+        raise ValueError("No usable clusters/papers found in representatives JSON file.")
 
     # -----------------------------
     # Run TopicGPT
@@ -729,10 +857,10 @@ def run_topic_gpt(topic_url: str, model: str = "meta-llama/Llama-3.3-70B-Instruc
             umbrella_display_name=umbrella_display_name,
             umbrella_description=umbrella_description,
         )
-        # Only include n in the result (cluster size from header)
+        # Only include n in the result (cluster size from JSON)
         label["n"] = cluster_n.get(cluster_id)
 
-        # NEW: attach unsupervised metrics if available
+        # attach unsupervised metrics if available
         if cluster_id in metrics_by_cluster:
             label.update(metrics_by_cluster[cluster_id])
 
@@ -761,6 +889,7 @@ def run_topic_gpt(topic_url: str, model: str = "meta-llama/Llama-3.3-70B-Instruc
 
     print("Saved TopicGPT labels to:", out_path)
     return results
+
 
 
 def select_topic_from_topicgpt(topic_url: str) -> tuple[int, dict]:

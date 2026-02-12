@@ -127,4 +127,3 @@ class LLM:
         answer = re.sub(r"```json\n.*?```", "", content, flags=re.DOTALL).strip()
 
         return answer, citations
-
