@@ -54,6 +54,39 @@ def get_openalex_topics(cache_file="data/openalex/topics.json"):
     return topics
 
 
+def reconstruct_abstract(abstract_inverted_index):
+    """Safely rebuild abstract from OpenAlex abstract_inverted_index."""
+    if not abstract_inverted_index or not isinstance(abstract_inverted_index, dict):
+        return None
+
+    clean_items = []
+    for word, positions in abstract_inverted_index.items():
+        if not isinstance(word, str):
+            continue
+        if not isinstance(positions, list):
+            continue
+
+        positions = [p for p in positions if isinstance(p, int) and p >= 0]
+        if not positions:
+            continue
+
+        clean_items.append((word, positions))
+
+    if not clean_items:
+        return None
+
+    max_pos = max(pos for _, positions in clean_items for pos in positions)
+    words = [""] * (max_pos + 1)
+
+    for word, positions in clean_items:
+        for pos in positions:
+            if 0 <= pos < len(words):
+                words[pos] = word
+
+    text = " ".join(w for w in words if w)
+    return text if text.strip() else None
+
+
 def get_works_for_topic(topic_url: str, n: int = 5000, random_state: int = 42,
                         chunk_size: int = 2000, max_rounds: int = 10):
     """
@@ -83,7 +116,7 @@ def get_works_for_topic(topic_url: str, n: int = 5000, random_state: int = 42,
     """
     topic_id = topic_url.rstrip("/").split("/")[-1]
 
-    save_dir = os.path.join("data", "openalex")
+    save_dir = os.path.join("../data", "openalex")
     os.makedirs(save_dir, exist_ok=True)
     save_path = os.path.join(save_dir, f"{topic_id}_works.json")
 
@@ -107,38 +140,6 @@ def get_works_for_topic(topic_url: str, n: int = 5000, random_state: int = 42,
         "review",
         "report",
     }
-
-    def reconstruct_abstract(abstract_inverted_index):
-        """Safely rebuild abstract from OpenAlex abstract_inverted_index."""
-        if not abstract_inverted_index or not isinstance(abstract_inverted_index, dict):
-            return None
-
-        clean_items = []
-        for word, positions in abstract_inverted_index.items():
-            if not isinstance(word, str):
-                continue
-            if not isinstance(positions, list):
-                continue
-
-            positions = [p for p in positions if isinstance(p, int) and p >= 0]
-            if not positions:
-                continue
-
-            clean_items.append((word, positions))
-
-        if not clean_items:
-            return None
-
-        max_pos = max(pos for _, positions in clean_items for pos in positions)
-        words = [""] * (max_pos + 1)
-
-        for word, positions in clean_items:
-            for pos in positions:
-                if 0 <= pos < len(words):
-                    words[pos] = word
-
-        text = " ".join(w for w in words if w)
-        return text if text.strip() else None
 
     def is_complete_work(w: dict) -> bool:
         """Apply the same screening as load_topic_title_abstract() would."""
@@ -284,7 +285,7 @@ def get_works_for_topic_reservoir_sampling(topic_url, n=10000):
     topic_id = topic_url.rstrip("/").split("/")[-1]
 
     # Prepare directory & file paths
-    save_dir = os.path.join("data", "openalex")
+    save_dir = os.path.join("../data", "openalex")
     os.makedirs(save_dir, exist_ok=True)
     save_path = os.path.join(save_dir, f"{topic_id}_works_{n}.json")
 

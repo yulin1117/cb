@@ -16,7 +16,7 @@ import hdbscan
 from typing import Any
 
 from llm.topic_gpt import TopicGPT
-from openalex import load_topic_title_abstract, get_openalex_topics, get_works_for_topic
+from openalex.openalex import load_topic_title_abstract, get_openalex_topics, get_works_for_topic
 
 # -----------------------------
 # Helpers: cleaning + stopwords
@@ -222,7 +222,7 @@ def select_openalex_topics(n: int = 25, random_state: int = 42) -> dict[str, lis
     :param random_state: Random seed for deterministic sampling.
     :return: Dict mapping field_display_name -> list of topic ids (OpenAlex URLs).
     """
-    out_dir = os.path.join("data", "openalex")
+    out_dir = os.path.join("../data", "openalex")
     out_path = os.path.join(out_dir, "selected_topics.json")
 
     # -----------------------------
@@ -346,7 +346,7 @@ def cluster_topic(
         - cluster_sizes: dict[int, int] mapping cluster_id to the number of papers in each returned cluster.
         - cluster_metrics: dict[int, dict[str, float]] mapping cluster_id to coherence/distinctiveness/score.
     """
-    out_root: str = os.path.join("out", "topics")
+    out_root: str = os.path.join("../out", "topics")
 
     # -----------------------------
     # Constants (kept internal for simplicity)
@@ -682,7 +682,7 @@ def cluster_topic(
 
 
 def run_topic_gpt(topic_url: str, model: str = "meta-llama/Llama-3.3-70B-Instruct", temperature: float = 0.2,
-                  representative_abstracts: int = 20, out_root: str = os.path.join("out", "topics")) \
+                  representative_abstracts: int = 20, out_root: str = os.path.join("../out", "topics")) \
         -> dict[int, dict[str, Any]]:
     """
     Run TopicGPT labeling on clustered representative abstracts.
@@ -711,7 +711,7 @@ def run_topic_gpt(topic_url: str, model: str = "meta-llama/Llama-3.3-70B-Instruc
     # -----------------------------
     # Load OpenAlex umbrella topic metadata
     # -----------------------------
-    topics_path: str = os.path.join("data", "openalex", "topics.json")
+    topics_path: str = os.path.join("../data", "openalex", "topics.json")
 
     if not os.path.exists(topics_path):
         from openalex import get_openalex_topics  # local import avoids circular imports
@@ -917,7 +917,7 @@ def select_topic_from_topicgpt(topic_url: str) -> tuple[int, dict]:
         - selected_topicgpt_json: TopicGPT label payload for the selected cluster (may be {} on fallback).
     """
     representative_abstracts: int = 20
-    out_root: str = os.path.join("out", "topics")
+    out_root: str = os.path.join("../out", "topics")
 
     # -----------------------------
     # Resolve topic_id and paths (aligned with run_topic_gpt)
@@ -1048,7 +1048,7 @@ def select_topic_from_topicgpt(topic_url: str) -> tuple[int, dict]:
     return int(selected_cluster), selected_payload
 
 
-def create_openalex_dataset(n_per_field: int = 20, works_n: int = 5000, random_state: int = 4):
+def create_openalex_dataset(n_per_field: int = 10, works_n: int = 5000, random_state: int = 42):
     """
     Create the OpenAlex-based benchmark dataset by running:
       - topic selection (stratified by field),
@@ -1067,7 +1067,7 @@ def create_openalex_dataset(n_per_field: int = 20, works_n: int = 5000, random_s
     :param works_n: number of complete works to retrieve per topic (get_works_for_topic handles top-up)
     :param random_state: random seed used for topic selection + work sampling
     """
-    out_csv: str = os.path.join("data", "openalex", "openalex_dataset.csv")
+    out_csv: str = os.path.join("../data", "openalex", "openalex_dataset.csv")
     os.makedirs(os.path.dirname(out_csv), exist_ok=True)
 
     # -----------------------------
