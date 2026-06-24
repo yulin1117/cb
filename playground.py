@@ -43,8 +43,8 @@ model = "meta-llama/Llama-3.3-70B-Instruct"
 
 # TODO Tobias: Adjust position bias mitigation -> from 20 runs to 5 runs -> queue +4 with seeded random shuffle per run -> ensure 1-4, 5-8, 9-12, 13-16, 17-20
 
-create_openalex_dataset() # @Asmina: This is the function you need!
-
-# dataset_to_csv()
-
-# eda()
+create_openalex_dataset(n_per_field=10, works_n=8000, random_state=42)
+dataset_to_csv()
+# 3. 測試自動繪製統計圖表與缺失值 EDA 報告
+# 將下面這一行的註解解開：
+eda()

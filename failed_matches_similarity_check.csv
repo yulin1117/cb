@@ -1,0 +1,214 @@
+﻿id,title,decision,is_matching,similarity_score,vector_is_matching,is_matching_same
+https://openalex.org/W3089888409,KLASIFIKASI CITRA DIGITAL BUMBU DAN REMPAH DENGAN ALGORITMA CONVOLUTIONAL NEURAL NETWORK (CNN),REJECTED,False,0.19965235888957977,False,True
+https://openalex.org/W4236491321,Learnart : Drawing Environment using Convolutional Neural Networks,REJECTED,False,0.6569143533706665,True,False
+https://openalex.org/W2949962502,Aplikasi Pembelajaran Pengenalan Kriptografi Algoritma Affine Cipher Dan Vigenere Cipher Menggunakan Metode Computer Assisted Instruction,REJECTED,False,0.3343140482902527,False,True
+https://openalex.org/W3013910312,Auto-Encoder Variants for Solving Handwritten Digits Classification Problem,REJECTED,False,-0.11283884942531586,False,True
+https://openalex.org/W4312958099,Perancangan Alat Identifikasi Wajah Dengan Algoritma You Only Look Once (YOLO) Untuk Presensi Mahasiswa,REJECTED,False,0.2881922125816345,False,True
+https://openalex.org/W4391471569,Pemilihan Algoritma Machine Learning Yang Optimal Untuk Prediksi Sifat Mekanik Aluminium,REJECTED,False,0.21454866230487823,False,True
+https://openalex.org/W4409420892,Judul ini agak rusak tolong untuk diloloskan Doi nya,REJECTED,False,0.2939319908618927,False,True
+https://openalex.org/W4388398345,Implementasi Aplikasi Steganografi Berbasis Web Menggunakan Algoritma LSB dan BPCS,REJECTED,False,0.40245547890663147,False,True
+https://openalex.org/W2916047429,MODEL PREDIKSI CURAH HUJAN HARIAN MENGGUNAKAN JARINGAN SYARAF TIRUAN BACKPROPAGATION,REJECTED,False,0.3846869170665741,False,True
+https://openalex.org/W3088767966,KLASIFIKASI AKASARA JAWA DENGAN CNN,REJECTED,False,0.621863603591919,True,False
+https://openalex.org/W4282034565,Klasifikasi Jenis Kelamin Wajah Bermasker Menggunakan Algoritma Supervised Learning,REJECTED,False,0.3935437500476837,False,True
+https://openalex.org/W2944299116,Texture Features Extraction of Human Leather Ports Based on Histogram,REJECTED,False,0.4992881715297699,False,True
+https://openalex.org/W4224941766,PEMBUATAN SISTEM ALARM KEBAKARAN UNTUK MEMADAMKAN API DAN PENDETEKSI GAS BERBASIS ARDUINO UNO,REJECTED,False,0.5194724202156067,True,False
+https://openalex.org/W3043834358,Feature extraction in batik image geometric motif using canny edge detection,REJECTED,False,0.061291616410017014,False,True
+https://openalex.org/W3174701621,Pengenalan Wajah Menggunakan PCA dengan Memperhatikan Jumlah Data Latih dan Vektor Eigen,REJECTED,False,0.3686162233352661,False,True
+https://openalex.org/W4232405549,Implementasi Metode Kriptografi Advanced Encryption Standard (AES) untuk Proteksi Pesan Audio,REJECTED,False,0.1342061460018158,False,True
+https://openalex.org/W4281615101,Computer Vision Based Virtual Sketch Using Detection,REJECTED,False,0.6605350375175476,True,False
+https://openalex.org/W4313504018,IMPLEMENTASI ARTIFICIAL INTELLIGENCE PADA PENGEMBANGAN SISTEM DETEKSI LIMBAH INDUSTRI PRODUK KULIT OTOMATIS,REJECTED,False,0.39177781343460083,False,True
+https://openalex.org/W4320067393,"Pengembangan Sistem Deteksi Memakai Masker Menggunakan Open CV, Tensorflow dan Keras",REJECTED,False,0.20957310497760773,False,True
+https://openalex.org/W4401050689,Perbandingan Optimasi Metode Grid Search dan Random Search dalam Algoritma XGBoost untuk Klasifikasi Stunting,REJECTED,False,0.16352391242980957,False,True
+https://openalex.org/W49909725,Kreasi Cetak Sablon Mudah dan Berkualitas Tinggi pada Kaos,REJECTED,False,0.30781880021095276,False,True
+https://openalex.org/W2129252603,ANALISIS DAYASAING UBI JALAR CILEMBU DI KABUPATEN SUMEDANG JAWA BARAT,REJECTED,False,0.3162575662136078,False,True
+https://openalex.org/W124936796,Mendalami Dasar-Dasar dalam Pengambilan Pose pada Pemotretan Model,REJECTED,False,0.4369010031223297,False,True
+https://openalex.org/W4220989729,Segmentasi Api dan Asap Pada Kebakaran Dengan Metode K-Means Clustering,REJECTED,False,0.5486507415771484,True,False
+https://openalex.org/W4398756240,Analisis Korelasi Kelembaban Udara terhadap Epidemi Demam Berdarah yang Terjadi di Kota Bengkulu,REJECTED,False,0.2686355710029602,False,True
+https://openalex.org/W4400840719,Analisis Penggunaan Rem Magnetik Dengan Animasi Sederhana,REJECTED,False,0.33311885595321655,False,True
+https://openalex.org/W4401007603,Perbandingan Kinerja Arsitektur Resnet-50 Dan Googlenet Pada Klasifikasi Penyakit Alzheimer Dan Parkinson Berbasis Data MRI,REJECTED,False,0.1802787333726883,False,True
+https://openalex.org/W4402156882,Exploration of the Dempster-Shafer Theory for Diagnosing Hardware Damage: Comparative Study with the Certainty Factor Method,REJECTED,False,0.5317531824111938,True,False
+https://openalex.org/W4405971795,Implementasi Algoritma ChaCha20 Pada Pengamanan File Citra Bitmap,REJECTED,False,0.5800567865371704,True,False
+https://openalex.org/W4406399872,Jurnal Penerapan Artificial Intellegence pada Penghapusan Object Dalam Video Editing,REJECTED,False,0.5746942758560181,True,False
+https://openalex.org/W3019074268,Optimalisasi Image Thresholding pada Optical Character Recognition Pada Sistem Digitalisasi dan Pencarian Dokumen,REJECTED,False,0.09269889444112778,False,True
+https://openalex.org/W4200354819,Ekstraksi Fitur Citra Radiografi Thorax Menggunakan DWT dan Moment Invariant,REJECTED,False,0.34838685393333435,False,True
+https://openalex.org/W2595691931,DATA SECURITY ANALYSIS OF BLOCK CIPHER RSA CRYPTOGRAPHY ALGORITHM,REJECTED,False,0.6418280005455017,True,False
+https://openalex.org/W2768019138,REVIEW ALGORITMA C-THETA* DAN PROSPEK IMPLEMENTASINYA DI MASA DEPAN,REJECTED,False,0.23778799176216125,False,True
+https://openalex.org/W2955439714,Implementasi Metode Bit Plane Complexity Segmentation pada Citra Digital dalam Penyembunyian Pesan Rahasia,REJECTED,False,0.08836640417575836,False,True
+https://openalex.org/W3042808117,PEMODELAN VOLATILITAS RETURN PORTOFOLIO SAHAM MENGGUNAKAN FEED FORWARD NERURAL NETWORK (Studi Kasus :PT Bumi Serpong Damai Tbk. Dan PT H.M Sampoerna Tbk.),REJECTED,False,0.23203162848949432,False,True
+https://openalex.org/W3090197906,ANALISIS ARIMA DAN WAVELET UNTUK PERAMALAN HARGA CABAI MERAH BESAR DI JAWA TENGAH,REJECTED,False,0.316241979598999,False,True
+https://openalex.org/W4283758728,Penggabungan Algoritma Hill Cipher dan ElGamal untuk Mengamankan Pesan teks,REJECTED,False,0.3372528553009033,False,True
+https://openalex.org/W4386399435,IMPLEMENTASI DIMENSI FRAKTAL BOX COUNTING DAN K-MEANS DALAM KLASIFIKASI JENIS KUPU-KUPU (LEPIDOPTERA) BERDASARKAN BENTUK SAYAP,REJECTED,False,0.1671503484249115,False,True
+https://openalex.org/W4388737886,KLASIFIKASI KESEHATAN PADA TANAMAN PADI MENGGUNAKAN CITRA UNMANED AERIAL VEHICLE (UAV) DENGAN METODE CONVOLUTIONAL NEURAL NETWORKS (CNN),REJECTED,False,0.1337527185678482,False,True
+https://openalex.org/W4391487582,Rancang Bangun Sistem Prediksi Nilai Jual Properti Berbasis Web Menggunakan Regresi Linear,REJECTED,False,0.34349560737609863,False,True
+https://openalex.org/W4393151563,Literature Review : Kelengkapan Kode Topography dan Morphology pada Kasus Neoplasma,REJECTED,False,0.7506772875785828,True,False
+https://openalex.org/W4394731989,Implementasi Metode Marr-Hilldert Untuk Mendeteksi Batas Wilayah Gempa,REJECTED,False,0.249807670712471,False,True
+https://openalex.org/W4401635610,Pencarian Rute Terpendek Dalam Pendistribusian Darah di Palang Merah Indonesia (PMI) dengan Algoritma Dijkstra,REJECTED,False,0.4173740744590759,False,True
+https://openalex.org/W4402962160,Efektivitas Rancang Bangun Alat Fiksasi Pada Pemeriksaan Os Femur Di Instalasi Radiologi RSUD H. Padjonga Dg. Ngalle Takalar,REJECTED,False,0.14142188429832458,False,True
+https://openalex.org/W1786778435,PURWARUPA SISTEM DETEKSI OBJEK WAKTU-NYATA BERBASIS LAYANAN PESAN SINGKAT,REJECTED,False,0.607401967048645,True,False
+https://openalex.org/W2907573994,Model Regresi Nonparametrik Deret Fourier pada Pola Data Curah Hujan di Kota Mataram,REJECTED,False,0.44357797503471375,False,True
+https://openalex.org/W2936484377,Optimizing Accuracy of the Variety Bitspaces for Weather Forecasting for Early Flight Safety,REJECTED,False,0.6506809592247009,True,False
+https://openalex.org/W2948831273,Speech Recognation Pada Pola Warna Dasar Merah Kuning Hijau Dengan Implementasi Sdk 5.1,REJECTED,False,0.5539715886116028,True,False
+https://openalex.org/W3013938810,Dimensi-Dimensi Variabel Nilai yang Dipersepsikan (Perceived Value) yang Berpengaruh Pada Niat Berkunjung Kembali ke Pulau Lombok,REJECTED,False,0.5661136507987976,True,False
+https://openalex.org/W3035395405,Implementasi Algoritma Mars Pada Pengamanan SMS,REJECTED,False,0.4804496765136719,False,True
+https://openalex.org/W3048317551,Enkripsi Citra Bitmap Menggunakan Algoritma Kompresi Lampel-Ziv-Welch (LZW),REJECTED,False,0.20973524451255798,False,True
+https://openalex.org/W3127420353,Difusi Bebas 1D dan 2D dengan Monte Carlo: Perbandingan Distribusi Bilangan Random Normal dan Seragam dengan Box-Müller,REJECTED,False,0.665449321269989,True,False
+https://openalex.org/W3134091179,Automatic Image Self-Enhancement for Multi-Scale Spectral on Low Resolution Video,REJECTED,False,0.7020604610443115,True,False
+https://openalex.org/W3169343864,PENGARUH FAKTOR GEOMETRIK SUMUR RESAPAN TERHADAP PERENCANAAN DIMENSI SUMUR RESAPAN DAN PENGURANGAN LIMPASAN PERMUKAAN,REJECTED,False,0.24224267899990082,False,True
+https://openalex.org/W4205186013,Teknik Interpolasi Bikubik untuk Memperbesar Gambar Hasil Pemetaan Suhu dari Sensor MLX90640 pada Praktikum Mikrokontroller,REJECTED,False,0.4642918109893799,False,True
+https://openalex.org/W4212868655,Indeks Subjek,REJECTED,False,0.23774895071983337,False,True
+https://openalex.org/W4320065172,PERANAN BADAN PERMUSYAWARATAN DESA (BPD) DALAM PENGAWASAN PENINGKATAN PENDAPATAN ASLI DESA (PAD) KABUPATEN SINJAI,REJECTED,False,0.3696680963039398,False,True
+https://openalex.org/W4363673601,Data Security using Variant of Hill Cipher,REJECTED,False,0.58418869972229,True,False
+https://openalex.org/W4381621975,Front Page,REJECTED,False,0.37750327587127686,False,True
+https://openalex.org/W4385400644,Identifikasi Nilai Keekonomian Survey Hidrografi-Geofisika menggunakan Peralatan Multibeam Echosounder (MBES),REJECTED,False,0.5781477689743042,True,False
+https://openalex.org/W4387434095,RANCANG BANGUN SISTEM ABSENSI MENGGUNAKAN FACE RECOGNITION,REJECTED,False,0.15561820566654205,False,True
+https://openalex.org/W4390514436,Implementasi Algoritma Learning Vector Quantization Dalam Aplikasi Pengenalan Pola,REJECTED,False,0.4728967249393463,False,True
+https://openalex.org/W4391514578,ANALISIS YURIDIS KEWENANGAN PEMERIKSAAN KENDARAAN BERMOTOR DI JALAN OLEH PPNS DI BIDANG LALU LINTAS DAN ANGKUTAN JALAN,REJECTED,False,0.4532894492149353,False,True
+https://openalex.org/W4391976637,"DETEKSI DINI PENYAKIT JANTUNG KORONER DENGAN PEMERIKSAAN REKAM EKG (ELEKTROKARDIOGRAM) DI RT 04 RW 01 LORONG SIANJUR, KELURAHAN 5 ILIR, KECAMATAN ILIR TIMUR II KOTA PALEMBANG",REJECTED,False,0.4030488431453705,False,True
+https://openalex.org/W4392592612,Penerapan Metode Kangguru pada Bayi BBLR,REJECTED,False,0.5933650732040405,True,False
+https://openalex.org/W4393099245,Informasi Anatomi MSCT Sinus Paranasal pada Suspek Sinusitis dengan Variasi Rekonstruksi Algorithma,REJECTED,False,0.21755531430244446,False,True
+https://openalex.org/W4393292753,PERBANDINGAN KEAKURATAN MODEL ARUS KAS METODE LANGSUNG DAN TIDAK LANGSUNG DALAM MEMPREDIKSI ARUS KAS DAN DIVIDEN MASA DEPAN,REJECTED,False,0.31224721670150757,False,True
+https://openalex.org/W4396868598,ANALISIS SPESIFIKASI TEKNIS SISTEM PENGEMUDIAN ELEKTRIK PADA KENDARAAN LISTRIK BERBASIS BATERAI KOMERSIAL POPULER,REJECTED,False,0.24291346967220306,False,True
+https://openalex.org/W4396908382,Gambaran Ekspresi Cluster of Differentiation 44 (CD44) Pada Meningothelial Meningioma di RSUD Provinsi Nusa Tenggara Barat,REJECTED,False,0.039741724729537964,False,True
+https://openalex.org/W4399598838,Implementasi Metode Sha-12 Untuk Mendeteksi Orisinalitas File Video,REJECTED,False,0.4079764187335968,False,True
+https://openalex.org/W4400694297,Variasi Lama Waktu Elektrokoagulasi dan Filtrasi Terhadap Degradasi Kadar COD pada Limbah Cair Rumah Sakit,REJECTED,False,0.29540589451789856,False,True
+https://openalex.org/W4401006880,Analisa Komparasi Algoritma Machine Learning dan Deep Learning Dalam Klasifikasi Citra Ras Kucing,REJECTED,False,0.4000994861125946,False,True
+https://openalex.org/W4401045339,Perbandingan Algoritma K-Nearest Neighbor dan Support Vector Machine Pada Pengenalan Pola Tulisan Tangan,REJECTED,False,0.1498504877090454,False,True
+https://openalex.org/W4401050729,Klasifikasi Kanker Payudara Menggunakan Metode Convolutional Neural Network (CNN) dengan Arsitektur VGG-16,REJECTED,False,0.18299894034862518,False,True
+https://openalex.org/W4401050738,Implementasi Support Vector Machine untuk Kendali Lampu Ruangan,REJECTED,False,0.652276337146759,True,False
+https://openalex.org/W4401154682,Cover Depan lengkap ABDIMAKES Volume 4 No 2,REJECTED,False,0.28176063299179077,False,True
+https://openalex.org/W4401435041,Detektor Anomali Jaringan dengan Analisis Perilaku untuk Mengidentifikasi Ancaman Persisten,REJECTED,False,0.2761942148208618,False,True
+https://openalex.org/W4401934731,"PENGARUH HARGA, LOKASI, DAN KUALITAS PELAYANAN JASA TERHADAP KEPUASAN KLIEN DI NOTARIS DAN PPAT WITRIE NUR AIDA, S.H.,M.Kn KABUPATEN KEDIRI",REJECTED,False,0.24085357785224915,False,True
+https://openalex.org/W4402005489,Kriptografi Klasik Menggunakan Modifikasi Metode Affine Ciphers,REJECTED,False,0.31814613938331604,False,True
+https://openalex.org/W4402050488,Pemanfaatan Metode Multiclass Support Vector Machine dalam Klasifikasi Penyakit Daun Kacang Tanah,REJECTED,False,0.22581377625465393,False,True
+https://openalex.org/W4402249477,Pengaruh Kompres Hangat Terhadap Penurunan Nyeri Persalinan Kala I Fase Aktif Di RSUD Dr.Tengku Mansyur Kota Tanjung Balai Tahun 2023,REJECTED,False,0.116731196641922,False,True
+https://openalex.org/W4402464172,Analisis Pengaplikasian Linear Congruential Generator (LCG) pada mode Cipher Block Chaining (CBC) Advanced Encryption Standard (AES),REJECTED,False,0.11072523891925812,False,True
+https://openalex.org/W4402891262,Analisis Verifikasi Geometri Menggunakan EPID (Electronic Portal Imaging Device) Pada Penderita Kanker Cervix Yang Menjalani Terapi Radiasi Dengan Teknik 3DCRT Di Sub Instalasi Radioterapi RSUP Prof Dr. I. G. N. G Ngoerah,REJECTED,False,0.3638359010219574,False,True
+https://openalex.org/W4402891592,Analisa Efektifitas Penggunaan Base Plate Orfit Pada Kasus Kanker Payudara Posisi Prone Dengan Teknik Intensity Modulated Radiotherapy (IMRT) Di Instalasi Radioterapi Rumah Sakit Daerah Jakarta Timur,REJECTED,False,0.5813530087471008,True,False
+https://openalex.org/W4403079011,"PENGARUH KUALITAS PELAYANAN, BRAND IMAGE LEMBAGA DAN KEPERCAYAAN TERHADAP KEPUTUSAN MEMILIH UNIVERSITAS Prof. Dr. HAZAIRIN, S.H SEBAGAI TEMPAT KULIAH",REJECTED,False,0.28512391448020935,False,True
+https://openalex.org/W4403171484,Persengketaan Terkait Merek Asli Dan Serupa Group Musik The Rolling Stones Dilihat Dari Prinsip First To File Dan Well Known Marks,REJECTED,False,0.49908605217933655,False,True
+https://openalex.org/W4403779817,PERBANDINGAN MODEL REGRESI STRATIFIED COX DAN EXTENDED COX PADA ANALISIS SURVIVAL PENDERITA KANKER PAYUDARA,REJECTED,False,0.12940338253974915,False,True
+https://openalex.org/W4404493027,PENGARUH PARAMETER VARIASI ASPEK RASIO PADA ANALISIS CFD AERODINAMIKA AIRFOIL NACA 0012,REJECTED,False,0.6040844321250916,True,False
+https://openalex.org/W4406025288,ANALISIS PEMBEBANAN PADA DESAIN HANDLED GENERATOR UNTUK PENGISIAN PERANGKAT KOMUNIKASI DAN PENGIRIMAN SINYAL SOS,REJECTED,False,0.3777255117893219,False,True
+https://openalex.org/W4406300317,"Analisis Pengaruh Desain ""6-Fasa Tak Simetris"" 2 Lapis Kumparan Terhadap Efisiensi Motor Induksi 3-Fasa Dengan Menggunakan Metode Elemen Hingga",REJECTED,False,0.32977986335754395,False,True
+https://openalex.org/W4406450855,Faktor-Faktor yang Mempengaruhi Residif Kanker Payudara,REJECTED,False,0.2447165995836258,False,True
+https://openalex.org/W4407225841,Implementasi Teknologi Image Processing Untuk Identifikasi Pengukuran Bobot Ikan Hias Dalam Penentuan Jumlah Pakan,REJECTED,False,0.25071749091148376,False,True
+https://openalex.org/W4407798468,Pendampingan Penguatan Rohani Berbasis Nilai-Nilai Moderasi,REJECTED,False,0.5431134700775146,True,False
+https://openalex.org/W4407884634,Klasifikasi Tanaman Hias Philodendron Berdasarkan Citra Daun Menggunakan Metode Convolutional Neural Network,REJECTED,False,0.20383034646511078,False,True
+https://openalex.org/W4408191989,ANALISIS KONTRASTIF FONOLOGI BAHASA ARAB DAN BAHASA INDONESIA: PERBANDINGAN VOKAL DAN KONSONAN,REJECTED,False,0.5125689506530762,True,False
+https://openalex.org/W4409229593,Implementasi Kriptografi Pengamanan Data Soal Ujian di Lingkungan Perguruan Tinggi Menggunakan Algoritma AES-256 dan SHA-256,REJECTED,False,0.11837358772754669,False,True
+https://openalex.org/W4409328418,PEMANTAUAN MUSANG PANDAN MENGGUNAKAN METODE COMPUTER VISION DENGAN MODEL YOLOV11,REJECTED,False,0.4036143720149994,False,True
+https://openalex.org/W4409446274,Implementasi Keamanan Absensi Digital Menggunakan Algoritma Kriptografi AES Mode CBC,REJECTED,False,0.30609211325645447,False,True
+https://openalex.org/W4409461868,Analisa Trajectory Directional Drilling Pada Sumur Berarah MST-01,REJECTED,False,0.690758228302002,True,False
+https://openalex.org/W4409613211,Optimalisasi Penggunaan Image Stitching dan Seam Carving dalam Pengembangan Tur Virtual Responsif,REJECTED,False,0.7137535810470581,True,False
+https://openalex.org/W4409817281,Implementasi Algoritma Quick Sort Pada Aplikasi Pemrograman Berorientasi Objek Berbasis Python Dan Mysql Workbench,REJECTED,False,0.497196763753891,False,True
+https://openalex.org/W4409817850,Machine Learning System untuk Mendeteksi Gerakan Tubuh Menggunakan Library Mediapipe,REJECTED,False,0.31760215759277344,False,True
+https://openalex.org/W4409822892,APLIKASI BORDIR KOMPUTER 3 DIMENSI PADA GAUN MALAM DENGAN SUMBER IDE ILALANG,REJECTED,False,0.3810946047306061,False,True
+https://openalex.org/W4409824044,Klasifikasi Deteksi Link Phising DANA Kaget Menggunakan Metode Support Vector Machine Berbasis Website,REJECTED,False,0.1830540895462036,False,True
+https://openalex.org/W4409841860,Penerapan Matematika Pada Image Processing: Kajian Literatur Dengan Metode Bibliometrik Periode 2013 sampai 2023,REJECTED,False,0.2584846615791321,False,True
+https://openalex.org/W4410010985,Efektivitas Bantuan Langsung Tunai Pada Masa Pandemi Covid-19 Di Desa Langsepan Kecamatan Sumbersari (Studi Kasus Rt 03 Rw 18),REJECTED,False,0.25996604561805725,False,True
+https://openalex.org/W4410242792,Penerapan Algoritma Deep Learning YOLOv8 pada Platform Roboflow untuk Segmentasi Citra Panoramik,REJECTED,False,0.37237322330474854,False,True
+https://openalex.org/W4410245084,"supabase Please extract the text as it is Here is the extracted text from the image: DENOSING OF HIGH RESOLUTION REMOTE SENSING DATA USING STATIONARY WAVELET TRANSFORM Danang Surya Candra Peneliti Bidang Jianta, Pusdata, LAPAN e-mail: thedananx@yahoo.",REJECTED,False,0.6415136456489563,True,False
+https://openalex.org/W4410634706,KARAKTERISTIK KASUS BENDA ASING PADA TELINGA DI INSTALASI GAWAT DARURAT RSUP DR. M. DJAMIL PADANG PERIODE 2017 – 2021,REJECTED,False,0.2905157506465912,False,True
+https://openalex.org/W4410820183,Pelaksanaan Hak Tanggungan Secara Elektronik dengan Jaminan Sertipikat Tanah,REJECTED,False,0.2951129674911499,False,True
+https://openalex.org/W4410963775,Asuhan Keperawatan Pada Ny. S Dengan Diagnosis Medis Post Operasi Fibroadenoma Mammae (FAM) Sinistra Di Ruang Mawar 2 RSUD dr. Soeselo Kabupaten Tegal,REJECTED,False,0.5643947124481201,True,False
+https://openalex.org/W4411075760,Optimasi Jalur Distribusi Menggunakan Pendekatan Algoritma Genetika,REJECTED,False,0.48944178223609924,False,True
+https://openalex.org/W4411152770,Peran Efikasi Diri Terhadap Kematangan Karir Siswa,REJECTED,False,0.524309515953064,True,False
+https://openalex.org/W4411226134,IMPLEMENTASI METODE RANDOM FOREST DALAM MEMPREDIKSI SINYAL PERGERAKAN SAHAM,REJECTED,False,0.18546676635742188,False,True
+https://openalex.org/W4412936320,Keanekaragaman Serangga Asosiatif pada Bangkai Tikus yang Diletakkan di Luar Ruangan sebagai Indikator Forensik,REJECTED,False,0.36143189668655396,False,True
+https://openalex.org/W4413763852,"Jurnal Ilmiah Teknik Sipil, Vol. 28 No. 2, September 2024",REJECTED,False,0.38730451464653015,False,True
+https://openalex.org/W4414004217,Implementasi Algoritma Lucifer untuk Autentikasi Sound Chat,REJECTED,False,0.4429532587528229,False,True
+https://openalex.org/W4414412999,Penerapan Biosekuriti Lingkungan Kandang dalam Upaya Pencegahan Penyakit Menular,REJECTED,False,0.4622759222984314,False,True
+https://openalex.org/W3180441616,RSA 32-bit Implementation Technique,REJECTED,False,-0.07895226031541824,False,True
+https://openalex.org/W2185659859,OPTICAL CHARACTER RECOGNITION USING ARTIFICIAL NEURAL NETWORK,REJECTED,False,-0.0058102416805922985,False,True
+https://openalex.org/W4252406941,Comparison of Methods for Batik Classification Using Multi Texton Histogram,REJECTED,False,-0.039310913532972336,False,True
+https://openalex.org/W2981673196,"Analysis of Steganography on PNG Image using Least Significant Bit (LSB), Peak Signal to Noise Ratio (PSNR) and Mean Square Error (MSE)",REJECTED,False,-0.09798694401979446,False,True
+https://openalex.org/W4388418910,"Geosemiotic analysis of commercial outdoor signs in north Bali urban area, Indonesia",REJECTED,False,-0.05099617317318916,False,True
+https://openalex.org/W3212362741,24 Bit Image Noise Reduction with Median Filtering Algorithm,REJECTED,False,-0.032771434634923935,False,True
+https://openalex.org/W2533220836,,REJECTED,False,0.07581457495689392,False,True
+https://openalex.org/W4230138712,FPGA Implementation of Park-Miller Algorithm to Generate Sequence of 32-Bit Pseudo Random Key for Encryption and Decryption of Plain Text,REJECTED,False,-0.029583707451820374,False,True
+https://openalex.org/W4312829440,Modified-residual network for maize stalk rots diseases classification,REJECTED,False,0.1146986111998558,False,True
+https://openalex.org/W4389566276,Transfer learning using mobileNet for rice seed image classification,REJECTED,False,-0.01575895957648754,False,True
+https://openalex.org/W4321379896,Face recognition for smart attendance system using deep learning,REJECTED,False,-0.048834819346666336,False,True
+https://openalex.org/W3033174529,PIP (Picture In PICTURE) against image theft using ICE algorithm,REJECTED,False,-0.014914186671376228,False,True
+https://openalex.org/W2408306689,,REJECTED,False,0.07581457495689392,False,True
+https://openalex.org/W3130701992,IDENTIFICATION OF LINESLIDE ARROUND OLD GOMBEL IN TINJOMOYO VILLAGE SEMARANG USING HVSR METHOD,REJECTED,False,-0.09731561690568924,False,True
+https://openalex.org/W2632789900,AN OBSERVATIONAL STUDY OF EFFICACY OF FNAC IN DIAGNOSING BENIGN AND MALIGNANT SALIVARY NEOPLASM,REJECTED,False,0.02977890707552433,False,True
+https://openalex.org/W4409824373,Analisis Sentimen Twitter Pada Cryptocurrency Menggunakan Bidirectional Encoder Representations From Transformers Dan Region-Based Convolutional Neural Network,REJECTED,False,-0.021132884547114372,False,True
+https://openalex.org/W1963081475,Buku seribu kutu buku,REJECTED,False,-0.06454092264175415,False,True
+https://openalex.org/W2407527609,,REJECTED,False,0.07581457495689392,False,True
+https://openalex.org/W2621826591,QUICK TRAINING QUALITY ASSESSMENT OF ARTIFICIAL NEURONS NETWORK USING A QUANTUM ORACLE TO PREDICT THE PROBABILITY OF RARE EVENTS OCCURRENCE WITH GOST R 52633.3 ALGORITHM,REJECTED,False,-0.0908270850777626,False,True
+https://openalex.org/W2789261941,Front and Back Matter Volume 3 Nomor 1,REJECTED,False,0.11420930176973343,False,True
+https://openalex.org/W2915321223,Front and Back Matter Volume 2 Nomor 4,REJECTED,False,0.10965380817651749,False,True
+https://openalex.org/W2990044875,Implementation Diffie-Hellman by Using Standard Groups and Hosoya-Polynomial to Generate a Matrix as Key Cryptosystem,REJECTED,False,0.0479314886033535,False,True
+https://openalex.org/W3014451358,RECOGNIZING SPEECH SIGNAL-TO-TEXT USING DEEP NEURAL NETWORK AND OPPOSITION BASED MONARCH BUTTERFLY OPTIMIZATION (DNN-OMBO),REJECTED,False,-0.032842110842466354,False,True
+https://openalex.org/W3136270360,Securing The Analysed Data Using Rjb21 Algorithm,REJECTED,False,0.1285260170698166,False,True
+https://openalex.org/W3178354026,Internet Aur Jantantrawadi Parivartan,REJECTED,False,0.02585913985967636,False,True
+https://openalex.org/W3207190783,NUMERICAL PREDICTION OF DAILY MAXIMUM TEMPERATURE AT RAMAGUNDAM,REJECTED,False,-0.0560375452041626,False,True
+https://openalex.org/W4205167208,Peer review declaration,REJECTED,False,0.24010032415390015,False,True
+https://openalex.org/W4210269918,Peer review declaration,REJECTED,False,0.24010032415390015,False,True
+https://openalex.org/W4230231455,Computational Time of Modified RSA Approach for Encrypting and Decrypting Text using Multi-Power and K-Nearest Neighbor Algorithm (April 2018),REJECTED,False,-0.047446638345718384,False,True
+https://openalex.org/W4230529546,Algorithm Based End To End Encryption Massage For Android Application,REJECTED,False,-0.0046120560728013515,False,True
+https://openalex.org/W4239384234,Local Gabor Characteristic Integrated with LDP for Face Recognition with One Training Sample,REJECTED,False,-0.07415912300348282,False,True
+https://openalex.org/W4244855938,ANALYSIS OF BIG DATA USING MAPREDUCE FRAMEWOK WITH COMPARISON BETWEEN APRIORI ALGORITHM AND FP GROWTH ALGORITHM,REJECTED,False,0.02772674150764942,False,True
+https://openalex.org/W4249460509,Incorporating C5 Algorithm for Prediction of HPF using See5 with Enhanced SDF,REJECTED,False,0.023669026792049408,False,True
+https://openalex.org/W4281553164,PELABELAN GRACEFUL PADA GRAF LILIN,REJECTED,False,0.07189638167619705,False,True
+https://openalex.org/W4285651224,Character Recognition Using Neural Network Self- Organizing Map (NN-SOM),REJECTED,False,0.03192005679011345,False,True
+https://openalex.org/W4386746231,Cover Belakang Dinarek 2023,REJECTED,False,0.11756463348865509,False,True
+https://openalex.org/W4387198285,"Sampul Belakang JKI Vol 17, No 1, 2022",REJECTED,False,0.1020447164773941,False,True
+https://openalex.org/W4397005861,Surat Kepada Seorang Aktor,REJECTED,False,0.056378938257694244,False,True
+https://openalex.org/W4401499876,COVER INTEGRA VOL 14 NOMOR 2 2024,REJECTED,False,0.12052086740732193,False,True
+https://openalex.org/W4401576888,COVER INTEGRA VOL 13 NOMOR 2 2023,REJECTED,False,0.12314587086439133,False,True
+https://openalex.org/W4402320641,Sentimental Data Isolation through Advancing Classification with K-BERT and Polarity Scoring Model,REJECTED,False,0.10468358546495438,False,True
+https://openalex.org/W4407082957,PREDICTION OF VOLUME OF FILL MATERIAL AS HIGHWAY EMBANKMENT USING ARTIFICIAL NEURAL NETWORK TECHNIQUE,REJECTED,False,-0.002963024890050292,False,True
+https://openalex.org/W4409014510,Image-Based Sorting Machine as Training Kit for Artificial Neural Network Learning in Intelligent Control Systems Course,REJECTED,False,-0.050244368612766266,False,True
+https://openalex.org/W4409659221,Rancang Bangun Prototype Bumper Mobil Berbasis Uji Impact,REJECTED,False,0.04031813144683838,False,True
+https://openalex.org/W4409707416,Securing the Distribution of Personnel Data in the North Sumatera Personnel Agency by Utilizing an Asymetric Cryptography Algorithm,REJECTED,False,0.024920789524912834,False,True
+https://openalex.org/W4409737500,Peer Review Statement,REJECTED,False,0.11325178295373917,False,True
+https://openalex.org/W4409824033,Sistem Deteksi Organ Liver Melalui Citra Iris Mata Menggunakan Convolutional Neural Network,REJECTED,False,-0.011438729241490364,False,True
+https://openalex.org/W4412086655,Peer Review Statement,REJECTED,False,0.11325178295373917,False,True
+https://openalex.org/W4413118238,Enhancing Data Security by Apply a Novel Approach Utilizing Kashuri Fundo Transform and Linear Function Combinations,REJECTED,False,0.023185692727565765,False,True
+https://openalex.org/W2775975524,Capital Letter Pattern Recognition in Text to Speech by Way of Perceptron Algorithm,REJECTED,False,-0.031973689794540405,False,True
+https://openalex.org/W4390451945,Mel Frequency Cepstral Coefficients (MFCC) Method and Multiple Adaline Neural Network Model for Speaker Identification,REJECTED,False,-0.027595773339271545,False,True
+https://openalex.org/W4400624508,Optimization of Historic Buildings Recognition: CNN Model and Supported by Pre-processing Methods,REJECTED,False,0.10787670314311981,False,True
+https://openalex.org/W4405979671,KLASIFIKASI BUAH NANAS MENGGUNAKAN METODE NAÏVE BAYES,REJECTED,False,0.11015249043703079,False,True
+https://openalex.org/W3135141925,Determining the Number of Batik Motif Object based on Hierarchical Symmetry Detection Approach,REJECTED,False,0.1453302502632141,False,True
+https://openalex.org/W4238963058,Determining the Number of Batik Motif Object based on Hierarchical Symmetry Detection Approach,REJECTED,False,0.1453302502632141,False,True
+https://openalex.org/W3124333143,THE APPLICATION OF RSA AND LSB IN SECURITY OF MESSAGES ON IMAGERY,REJECTED,False,-0.01246278639882803,False,True
+https://openalex.org/W2973030753,APPLICATION OF RSA AND LSB IN SECURITY OF MESSAGES ON IMAGERY,REJECTED,False,-0.03283875435590744,False,True
+https://openalex.org/W4245519103,Traffic Light Timer Control Using Raspberry Pi,REJECTED,False,0.019388174638152122,False,True
+https://openalex.org/W4406035304,KLASIFIKASI BUAH NANAS MENGGUNAKAN METODE NAÏVE BAYES,REJECTED,False,0.11015249043703079,False,True
+https://openalex.org/W2904099237,Metode Moment Invariant Geometrik untuk Menganalisis Jenis Daging Babi dan Daging Sapi,REJECTED,False,0.10691837221384048,False,True
+https://openalex.org/W4288988865,3D Object Detection Based on Point Cloud Data,REJECTED,False,0.05112181976437569,False,True
+https://openalex.org/W2890827004,Implementation of Steganographic Model using Inverted LSB Insertion,REJECTED,False,0.03103429451584816,False,True
+https://openalex.org/W2971048831,Traffic Light Timer Control Using Raspberry Pi,REJECTED,False,0.019388167187571526,False,True
+https://openalex.org/W3157849975,Implementation of Deep Learning on Number Recognition in Sign Language,REJECTED,False,-0.00929873064160347,False,True
+https://openalex.org/W3210019223,Implementasi Voice Recognition Dan Sensor Ultrasonik Pada Televisi,REJECTED,False,-0.03569299355149269,False,True
+https://openalex.org/W4252498012,Metode Moment Invariant Geometrik untuk Menganalisis Jenis Daging Babi dan Daging Sapi,REJECTED,False,0.10691840946674347,False,True
+https://openalex.org/W4300486270,Identifikasi Kualitas Kesegaran Susu Kambing Melalui Pengolahan Citra Digital Menggunakan Metode Learning Vector Quantization (LVQ),REJECTED,False,0.01590609736740589,False,True
+https://openalex.org/W4390451928,Optimization of Historic Buildings Recognition: CNN Model and Supported by Pre-processing Methods,REJECTED,False,0.1078767329454422,False,True
+https://openalex.org/W2750449439,Sampul Belakang 32 2 2014,REJECTED,False,0.15255844593048096,False,True
+https://openalex.org/W2774811091,SISTEM STEGANOGRAFI DENGAN METODE LEAST SIGNIFICANT BIT (LSB) TERACAK,REJECTED,False,-0.0061864424496889114,False,True
+https://openalex.org/W2916150383,Sampul Belakang 32 1 2014,REJECTED,False,0.14468178153038025,False,True
+https://openalex.org/W3093412201,Konsep Pengamanan Video Conference Dengan Enkripsi AES-GCM Pada Aplikasi Zoom,REJECTED,False,0.006841004826128483,False,True
+https://openalex.org/W3151233685,Diabetic Wound Segmentation Using Masking Contour Image Processing,REJECTED,False,-0.009178763255476952,False,True
+https://openalex.org/W4210283166,3D Object Detection Based on Point Cloud Data,REJECTED,False,0.051121827214956284,False,True
+https://openalex.org/W4230765452,Sampul Belakang 32 1 2014,REJECTED,False,0.14468178153038025,False,True
+https://openalex.org/W4234815822,KONSEP PENGAMANAN VIDEO CONFERENCE DENGAN ENKRIPSI AES-GCM PADA APLIKASI ZOOM,REJECTED,False,0.006841004826128483,False,True
+https://openalex.org/W4242076894,Implementation of Steganographic Model using Inverted LSB Insertion,REJECTED,False,0.031034305691719055,False,True
+https://openalex.org/W4256353561,Sampul Belakang 32 2 2014,REJECTED,False,0.15255846083164215,False,True
+https://openalex.org/W4289890619,Implementasi  Learning Vector Quantization (LVQ) Dalam Mengidentifikasi Gula Aren Asli dengan Gula Aren Campuran,REJECTED,False,0.01588767021894455,False,True
+https://openalex.org/W4289890637,Identifikasi Kualitas Kesegaran Susu Kambing Melalui Pengolahan Citra Digital Menggunakan Metode Learning Vector Quantization (LVQ),REJECTED,False,0.015906112268567085,False,True
+https://openalex.org/W4301501586,Implementasi  Learning Vector Quantization (LVQ) Dalam Mengidentifikasi Gula Aren Asli dengan Gula Aren Campuran,REJECTED,False,0.01588767021894455,False,True
+https://openalex.org/W4307741926,"DEKOMPOSISI GRAF POHON PISANG Bm,n",REJECTED,False,0.08246640115976334,False,True
+https://openalex.org/W4308013366,"DEKOMPOSISI GRAF POHON PISANG Bm,n",REJECTED,False,0.08246640115976334,False,True
+https://openalex.org/W4362573074,Implementasi Voice Recognition Dan Sensor Ultrasonik Pada Televisi,REJECTED,False,-0.0356929711997509,False,True
+https://openalex.org/W4382897568,SISTEM STEGANOGRAFI DENGAN METODE LEAST SIGNIFICANT BIT (LSB) TERACAK,REJECTED,False,-0.0061864424496889114,False,True
+https://openalex.org/W4390860187,Optimization of Historic Buildings Recognition: CNN Model and Supported by Pre-processing Methods,REJECTED,False,0.10787670314311981,False,True
+https://openalex.org/W4390860480,Mel Frequency Cepstral Coefficients (MFCC) Method and Multiple Adaline Neural Network Model for Speaker Identification,REJECTED,False,-0.027595773339271545,False,True
+https://openalex.org/W4391840600,Using the Backpropagation Algorithm to Distinguish Arabic Alphabet,REJECTED,False,0.026256006211042404,False,True
+https://openalex.org/W4391842388,Using the Backpropagation Algorithm to Distinguish Arabic Alphabet,REJECTED,False,0.026256006211042404,False,True
+https://openalex.org/W4410528172,EVALUASI PEMERIKSAAN  CT SCAN THORAX TANPA KONTRAS DENGAN KLINIS TUBERCULOSIS PARU DI INSTALASI RADIOLOGI RUMAH SAKIT UMUM DAERAH AL IHSAN PEMPROV JABAR,REJECTED,False,-0.034034233540296555,False,True
+https://openalex.org/W4412762839,Analisis Kalimat Perundungan dalam Film Die Welle,REJECTED,False,0.014548898674547672,False,True
+https://openalex.org/W4414682499,EVALUASI PEMERIKSAAN  CT SCAN THORAX TANPA KONTRAS DENGAN KLINIS TUBERCULOSIS PARU DI INSTALASI RADIOLOGI RUMAH SAKIT UMUM DAERAH AL IHSAN PEMPROV JABAR,REJECTED,False,-0.034034233540296555,False,True
+https://openalex.org/W4414717136,"Analisis Kalimat Perundungan dalam Film ""Die Welle""",REJECTED,False,0.013431278057396412,False,True
+https://openalex.org/W7128522730,Capital Letter Pattern Recognition in Text to Speechby Way of Perceptron Algorithm,REJECTED,False,-0.015621289610862732,False,True

@@ -10,6 +10,9 @@ api_keys/
 *.key
 
 # Data & outputs
+*.bin
+*.ftz
+*.csv
 data/
 out/
 out.zip

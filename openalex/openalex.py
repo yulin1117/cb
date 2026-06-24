@@ -3,9 +3,13 @@ import json
 import requests
 import random
 import time
-
-
-def get_openalex_topics(cache_file="data/openalex/topics.json"):
+import csv
+import hashlib
+from collections import Counter
+from nltk.tokenize import sent_tokenize
+import fasttext
+from sentence_transformers import SentenceTransformer, util
+def get_openalex_topics(cache_file="../data/openalex/topics.json"):
     """
     Fetch all topics from OpenAlex API or read from cache if available.
 
@@ -52,6 +56,66 @@ def get_openalex_topics(cache_file="data/openalex/topics.json"):
     print(f"Topics saved to {cache_file}")
 
     return topics
+
+def _get_fasttext_model():
+    _ft_model = None
+    FASTTEXT_MODEL_PATH = "lid.176.ftz"
+    _ft_model = fasttext.load_model(FASTTEXT_MODEL_PATH)
+    return _ft_model
+
+
+def _get_sentence_transformer_model():
+    _st_model = None
+    ST_MODEL_NAME = "all-MiniLM-L6-v2"
+    _st_model = SentenceTransformer(ST_MODEL_NAME)
+    return _st_model
+
+
+def lang_detect(text, model, threshold=0.2):
+    """
+    Sentence-by-sentence validation using FastText. Filters out documents containing more non-eng sentences than threshold.
+    """
+    sentences = sent_tokenize(text)
+    valid_sentences_count=0
+    non_eng_sentences  = 0  
+    for s in sentences:
+        s = s.strip().replace("\n", " ")
+        if len(s) < 5:
+            continue
+        valid_sentences_count += 1
+        labels, probs = model.predict(s, k=1)
+        lang = labels[0].replace("__label__", "")
+
+        if lang != "en" :
+            non_eng_sentences += 1
+    if valid_sentences_count > 0:
+        if non_eng_sentences / valid_sentences_count >= threshold:
+                return False        
+    return True
+def duplicate_detect(abstract: str, seen_hashes: set[str]) -> bool:
+    """
+    Deduplication Check: Returns True if abstract duplicate collision is detected.
+    """
+    abstract_key = hashlib.md5(abstract.strip().lower().encode()).hexdigest()
+    if abstract_key in seen_hashes:
+        return True
+    seen_hashes.add(abstract_key)
+    return False
+def content_detect(title: str, abstract: str, st_model) -> bool:
+    """
+    Compute the similarity of the title and the abstract. Returns True if it matches semantic expectations (>= 0.50).
+    """
+    # Execute semantic alignment validation
+    if st_model is not None:
+        try:
+            t_emb = st_model.encode(title.strip())
+            a_emb = st_model.encode(abstract.strip())
+            similarity_score = util.cos_sim(t_emb, a_emb).item()
+            if similarity_score < 0.5:
+                return False
+        except Exception:
+            return False  # Fail-safe reject on vectorization error
+    return True
 
 
 def reconstruct_abstract(abstract_inverted_index):
@@ -140,7 +204,8 @@ def get_works_for_topic(topic_url: str, n: int = 5000, random_state: int = 42,
         "review",
         "report",
     }
-
+    ft_model=_get_fasttext_model()
+    st_model=_get_sentence_transformer_model()
     def is_complete_work(w: dict) -> bool:
         """Apply the same screening as load_topic_title_abstract() would."""
         if w.get("type") not in ALLOWED_TYPES:
@@ -179,7 +244,7 @@ def get_works_for_topic(topic_url: str, n: int = 5000, random_state: int = 42,
 
     complete_works: list[dict] = []
     seen_ids: set[str] = set()
-
+    seen_abstract_hashes: set[str] = set()
     # -----------------------------
     # Top-up sampling loop
     # -----------------------------
@@ -232,14 +297,34 @@ def get_works_for_topic(topic_url: str, n: int = 5000, random_state: int = 42,
                 if wid in seen_ids:
                     continue
                 seen_ids.add(wid)
-
                 if not isinstance(w, dict):
                     continue
 
-                # Full screening (mirrors load_topic_title_abstract)
+                # Reconstruct abstract content from API payload
+                title = w.get("title") or ""
+                inv = w.get("abstract_inverted_index")
+                abstract = reconstruct_abstract(inv) or ""
+
+                # ─── rule-based filters ───
+
+                # 1. Missing Metadata filter check
                 if not is_complete_work(w):
                     continue
 
+                # 2. Duplicate Abstract check
+                if duplicate_detect(abstract, seen_abstract_hashes):
+                    continue
+
+                combined_text = f"{title}. {abstract}"
+                # 3. English language check (FastText sentence-by-sentence)
+                if not lang_detect(combined_text, ft_model):
+                    continue
+
+                # 4. Content match check (SentenceTransformer check)
+                if not content_detect(title, abstract, st_model):
+                    continue
+                
+                w["reconstructed_abstract"] = abstract
                 complete_works.append(w)
                 added_this_round += 1
 

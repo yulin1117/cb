@@ -4,7 +4,9 @@ import re
 import json
 import csv
 from collections import defaultdict
-
+import subprocess
+import requests
+import time
 import torch
 import numpy as np
 import umap
@@ -30,6 +32,15 @@ DEFAULT_DOMAIN_STOPWORDS = {
     "dataset", "datasets", "data", "task", "tasks", "analysis", "analyses", "using", "use", "used",
     "we", "our", "ours", "this", "these", "those", "their", "there", "here",
 }
+def _get_specter_model():
+    print(f"Initializing baseline Embedding Model ('allenai/specter2_base')...")
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    _specter_model = SentenceTransformer("allenai/specter2_base", device=device)
+    return _specter_model 
+# -----------------------------
+# global model
+# -----------------------------
+specter_model = _get_specter_model()
 
 def _normalize_text(s: str) -> str:
     """
@@ -205,7 +216,7 @@ def _cluster_scores_from_embeddings(emb: np.ndarray, labels: np.ndarray) -> tupl
     return coherence, distinctiveness, score
 
 
-def select_openalex_topics(n: int = 25, random_state: int = 42) -> dict[str, list[str]]:
+def select_openalex_topics(n: int = 25, random_state: int = 42,min_works: int = 10000) -> dict[str, list[str]]:
     """
     Select OpenAlex topic URLs stratified by OpenAlex field.
 
@@ -220,6 +231,7 @@ def select_openalex_topics(n: int = 25, random_state: int = 42) -> dict[str, lis
 
     :param n: Number of topics to sample per field (upper bound; fields with fewer topics return all).
     :param random_state: Random seed for deterministic sampling.
+    :param min_works: Topics need to exceeds at least 10000 works to be chosen
     :return: Dict mapping field_display_name -> list of topic ids (OpenAlex URLs).
     """
     out_dir = os.path.join("../data", "openalex")
@@ -236,6 +248,7 @@ def select_openalex_topics(n: int = 25, random_state: int = 42) -> dict[str, lis
                 isinstance(existing, dict)
                 and existing.get("n_per_field") == int(n)
                 and existing.get("random_state") == int(random_state)
+                and existing.get("min_works") == int(min_works)
                 and isinstance(existing.get("fields"), dict)
             ):
                 return existing["fields"]
@@ -258,7 +271,9 @@ def select_openalex_topics(n: int = 25, random_state: int = 42) -> dict[str, lis
 
         topic_id = t.get("id")
         field = t.get("field")
-
+        works_count = t.get("works_count", 0)
+        if not isinstance(works_count, int) or works_count < min_works:
+            continue
         if not isinstance(topic_id, str) or not topic_id.strip():
             continue
         if not isinstance(field, dict):
@@ -294,6 +309,7 @@ def select_openalex_topics(n: int = 25, random_state: int = 42) -> dict[str, lis
             {
                 "n_per_field": int(n),
                 "random_state": int(random_state),
+                "min_works": int(min_works),
                 "fields": selected,
             },
             f,
@@ -305,10 +321,9 @@ def select_openalex_topics(n: int = 25, random_state: int = 42) -> dict[str, lis
 
     return selected
 
-
 def cluster_topic(
         topic_url: str,
-        representative_abstracts: int = 20,
+        representative_abstracts: int = 50,#change from 20 to 50
         random_state: int = 42,
         return_all_clusters: bool = False,
         size_cap: int = 2000,
@@ -346,6 +361,7 @@ def cluster_topic(
         - cluster_sizes: dict[int, int] mapping cluster_id to the number of papers in each returned cluster.
         - cluster_metrics: dict[int, dict[str, float]] mapping cluster_id to coherence/distinctiveness/score.
     """
+    
     out_root: str = os.path.join("../out", "topics")
 
     # -----------------------------
@@ -512,15 +528,14 @@ def cluster_topic(
     # NOTE: lowercasing, if any, happens here via _normalize_text
     texts: list[str] = [_normalize_text(t) for t in texts_raw]
 
-    print(f"Loaded {len(texts)} papers. Computing embeddings ({embedding_model_name})...")
-
     # -----------------------------
     # Embeddings (CPU/GPU auto)
     # -----------------------------
-    device: str = "cuda" if torch.cuda.is_available() else "cpu"
-    model = SentenceTransformer(embedding_model_name, device=device)
+    # if specter_model is None:
+    #     global specter_model=_get_specter_model() //I don't know why it fail but comment this , works!
+    print(f"Loaded {len(texts)} papers. Computing embeddings ({embedding_model_name})...")
 
-    emb: np.ndarray = model.encode(
+    emb: np.ndarray = specter_model.encode(
         texts,
         batch_size=batch_size,
         show_progress_bar=True,
@@ -682,7 +697,7 @@ def cluster_topic(
 
 
 def run_topic_gpt(topic_url: str, model: str = "meta-llama/Llama-3.3-70B-Instruct", temperature: float = 0.2,
-                  representative_abstracts: int = 20, out_root: str = os.path.join("../out", "topics")) \
+                  representative_abstracts: int = 50, out_root: str = os.path.join("../out", "topics")) \
         -> dict[int, dict[str, Any]]:
     """
     Run TopicGPT labeling on clustered representative abstracts.
@@ -714,7 +729,7 @@ def run_topic_gpt(topic_url: str, model: str = "meta-llama/Llama-3.3-70B-Instruc
     topics_path: str = os.path.join("../data", "openalex", "topics.json")
 
     if not os.path.exists(topics_path):
-        from openalex import get_openalex_topics  # local import avoids circular imports
+        # from openalex import get_openalex_topics  # local import avoids circular imports
         get_openalex_topics()
         if not os.path.exists(topics_path):
             raise FileNotFoundError(
@@ -1048,7 +1063,7 @@ def select_topic_from_topicgpt(topic_url: str) -> tuple[int, dict]:
     return int(selected_cluster), selected_payload
 
 
-def create_openalex_dataset(n_per_field: int = 10, works_n: int = 5000, random_state: int = 42):
+def create_openalex_dataset(n_per_field: int = 10, works_n: int = 10000, random_state: int = 42):
     """
     Create the OpenAlex-based benchmark dataset by running:
       - topic selection (stratified by field),
@@ -1069,7 +1084,7 @@ def create_openalex_dataset(n_per_field: int = 10, works_n: int = 5000, random_s
     """
     out_csv: str = os.path.join("../data", "openalex", "openalex_dataset.csv")
     os.makedirs(os.path.dirname(out_csv), exist_ok=True)
-
+    
     # -----------------------------
     # Select OpenAlex topics (stratified by field)
     # -----------------------------
@@ -1152,13 +1167,18 @@ def create_openalex_dataset(n_per_field: int = 10, works_n: int = 5000, random_s
             continue
 
         try:
-            cluster_topic(topic_url=topic_url)
+            cluster_topic(topic_url=topic_url, representative_abstracts=50)
         except Exception as e:
             print(f"  [ERROR] cluster_topic failed for {topic_id}: {e}")
             continue
-
+        # vllm_filter 
         try:
-            _labels = run_topic_gpt(topic_url=topic_url)
+            filter_representatives_vllm(topic_id=topic_id, target_n=20)
+        except Exception as e:
+            print(f"  [ERROR] filter_representatives_vllm failed for {topic_id}: {e}")
+            continue
+        try:
+            _labels = run_topic_gpt(topic_url=topic_url, representative_abstracts=20)
         except Exception as e:
             print(f"  [ERROR] run_topic_gpt failed for {topic_id}: {e}")
             continue
@@ -1199,3 +1219,6 @@ def create_openalex_dataset(n_per_field: int = 10, works_n: int = 5000, random_s
             writer.writerow(r)
 
     print(f"\nSaved dataset CSV with {len(rows)} rows to: {out_csv}")
+
+
+

@@ -1,0 +1,30 @@
+================================================================================
+      📊 Feild vs valid topic num
+================================================================================
+                                  Field Name    total   oa=true   diamond
+        Agricultural and Biological Sciences     235      130        9
+                         Arts and Humanities     266       57        3
+Biochemistry, Genetics and Molecular Biology     248      163        1
+         Business, Management and Accounting     146       59        6
+                        Chemical Engineering      13        6        0
+                                   Chemistry     101       32        0
+                            Computer Science     302      149        4
+                           Decision Sciences      60       23        1
+                                   Dentistry      13       10        1
+                Earth and Planetary Sciences      57       42        0
+         Economics, Econometrics and Finance     107       49        4
+                                      Energy      27       12        0
+                                 Engineering     560      266        5
+                       Environmental Science     202      105        3
+                          Health Professions     107       49        2
+                 Immunology and Microbiology      44       29        0
+                           Materials Science     123       57        1
+                                 Mathematics      82       58        1
+                                    Medicine     692      446        9
+                                Neuroscience      62       44        0
+                                     Nursing      21       13        1
+  Pharmacology, Toxicology and Pharmaceutics      25        9        0
+                       Physics and Astronomy     104       74        2
+                                  Psychology     144       61        3
+                             Social Sciences     764      205       24
+                                  Veterinary      11        4        0
