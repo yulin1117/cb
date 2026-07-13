@@ -27,6 +27,9 @@ class LLM:
         self.client = OpenAI(base_url=base_url, api_key=api_key)
         self.model = model
         self.temperature = temperature
+        self.extra_body = {}
+        if "Kimi" in model:
+            self.extra_body = {"chat_template_kwargs": {"thinking": False}} 
 
     def request(self, prompt: Prompt, topic: str, use_metadata: bool = False,
                 context_docs: dict[str, dict[str, str]] | None = None) -> tuple[str, list[str]]:
@@ -92,7 +95,7 @@ class LLM:
             full_prompt += f"\n\n{metadata_text}"
         if context_text:
             full_prompt += f"\n\n{context_text}"
-
+        
         # --- Send request to model ---
         response = self.client.chat.completions.create(
             model=self.model,
@@ -109,6 +112,7 @@ class LLM:
                 },
                 {"role": "user", "content": full_prompt},
             ],
+            extra_body=self.extra_body
         )
 
         content = response.choices[0].message.content.strip()

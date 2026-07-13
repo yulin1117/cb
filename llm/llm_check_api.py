@@ -14,7 +14,7 @@ class SimpleScadsLLM:
     自建的 ScaDS LLM API 呼叫器
     直接使用 requests 呼叫 ScaDS AI 相容於 OpenAI 規格的 API 端點
     """
-    def __init__(self, model: str = "meta-llama/Llama-3.3-70B-Instruct", temperature: float = 0.0):
+    def __init__(self, model: str = "moonshotai/Kimi-K2.7-Code", temperature: float = 0.0):
         self.model = model
         self.temperature = temperature
         self.api_url = "https://llm.scads.ai/v1/chat/completions"
@@ -32,13 +32,17 @@ class SimpleScadsLLM:
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}"
         }
-        
         payload = {
             "model": self.model,
             "messages": [
                 {"role": "user", "content": prompt_text}
             ],
-            "temperature": self.temperature
+            "temperature": self.temperature,
+            "extra_body": {
+                "chat_template_kwargs": {
+                    "thinking": False
+                }
+            }
         }
         
         response = requests.post(self.api_url, headers=headers, json=payload, timeout=60)
@@ -52,7 +56,7 @@ class SemanticMatchVerifier:
     Focuses on auditing Title-Abstract semantic matching with robust JSON parsing,
     reason extraction, and detailed logging.
     """
-    def __init__(self, model: str = "meta-llama/Llama-3.3-70B-Instruct", temperature: float = 0.0):
+    def __init__(self, model: str = "moonshotai/Kimi-K2.7-Code", temperature: float = 0.0):
         # 設為 0.0 確保評分邊界極度穩定，不會有隨機性
         self.llm = SimpleScadsLLM(model=model, temperature=temperature)
         self.debug_count = 0  # 用於控制 debug 輸出數量，防止終端機被洗版

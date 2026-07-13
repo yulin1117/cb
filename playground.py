@@ -1,9 +1,9 @@
-from analysis import calculate_biases
+#from analysis import calculate_biases
 from openalex.data_analysis import dataset_to_csv, eda
-from openalex.openalex import get_openalex_topics, get_works_for_topic, load_topic_title_abstract
-from openalex.topic_clustering import create_openalex_dataset, select_openalex_topics
+#from openalex.openalex import get_openalex_topics, get_works_for_topic, load_topic_title_abstract
+#from openalex.topic_clustering import create_openalex_dataset, select_openalex_topics
 
-model = "meta-llama/Llama-3.3-70B-Instruct"
+model = "moonshotai/Kimi-K2.7-Code"
 # model = "meta-llama/Llama-4-Scout-17B-16E-Instruct"
 
 # llm = LLM(model=model)
@@ -43,8 +43,6 @@ model = "meta-llama/Llama-3.3-70B-Instruct"
 
 # TODO Tobias: Adjust position bias mitigation -> from 20 runs to 5 runs -> queue +4 with seeded random shuffle per run -> ensure 1-4, 5-8, 9-12, 13-16, 17-20
 
-create_openalex_dataset(n_per_field=10, works_n=8000, random_state=42)
-dataset_to_csv()
-# 3. 測試自動繪製統計圖表與缺失值 EDA 報告
-# 將下面這一行的註解解開：
+#create_openalex_dataset(n_per_field=1, works_n=8000, random_state=42)
+#dataset_to_csv()
 eda()

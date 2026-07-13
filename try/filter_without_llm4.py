@@ -8,7 +8,7 @@ import random
 from collections import Counter
 
 # Import raw data fetching and abstract reconstruction functions from local module
-from test2 import fetch_unfiltered_raw_works, reconstruct_abstract
+from CitationBias.test.test2 import fetch_unfiltered_raw_works, reconstruct_abstract
 from nltk.tokenize import sent_tokenize
 import fasttext
 from sentence_transformers import SentenceTransformer, util

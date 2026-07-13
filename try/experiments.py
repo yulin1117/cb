@@ -1,5 +1,5 @@
 from llm.llm_api import LLM
-from dataset import Dataset
+from CitationBias.test.dataset import Dataset
 
 import random
 import os

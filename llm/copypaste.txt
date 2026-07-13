@@ -1,0 +1,339 @@
+    (myenv) [yuzh952h@i8022.alpha CitationBias]$ python playground.py
+Initializing baseline Embedding Model ('allenai/specter2_base')...
+Loading weights: 100%|█| 199/199 [00:
+Skipping T14124: missing out/topics/T14124/final_verified_papers.json
+    
+    
+    /home/yuzh952h/workspaces/horse/yuzh952h-cb/out/topics/T14124/final_verified_papers.json
+    
+    topics_base_dir = Path(topics_base_dir)
+    output_csv = Path(output_csv)
+    output_csv.parent.mkdir(parents=True, exist_ok=True)
+
+    topics_by_field = select_openalex_topics(n=n)
+
+    rows: list[dict[str, Any]] = []
+    seen_papers: set[str] = set()
+
+    for field, topic_list in topics_by_field.items():
+
+        for topic in topic_list:
+
+            topic_id = _strip_openalex_id(topic)
+            topic_dir = topics_base_dir / topic_id
+
+            final_path = topic_dir / "final_verified_papers.json"
+
+            if not final_path.exists():
+                print(f"Skipping {topic_id}: missing {final_path}")
+                continue
+
+            try:
+                final = _load_json(final_path)
+            except Exception as e:
+                print(f"Skipping {topic_id}: failed to load {final_path} ({e})")
+                continue
+
+            topic_name = final.get("topic_name", "")
+
+            papers = final.get("papers", [])
+
+            if not papers:
+                print(f"Skipping {topic_id}: no verified papers")
+                continue
+
+            print(f"Processing {topic_id}: {len(papers)} verified papers")
+
+            for paper in papers:
+
+                if not isinstance(paper, dict):
+                    continue
+
+                paper_id = _strip_openalex_id(
+                    paper.get("id", "")
+                )
+
+                if not paper_id:
+                    continue
+
+                if deduplicate_papers and paper_id in seen_papers:
+                    continue
+
+                seen_papers.add(paper_id)
+
+                work = _fetch_work_from_openalex(
+                    paper_id=paper_id,
+                    mailto=mailto,
+                )
+
+                if work is None:
+                    continue
+
+                row = _work_to_row(
+                    work=work,
+                    field=field,
+                    topic_name=topic_name,
+                )
+
+                rows.append(row)
+
+                if sleep_seconds > 0:
+                    time.sleep(sleep_seconds)
+
+    fieldnames = [
+        "field",
+        "topic",
+        "id",
+        "title",
+        "abstract",
+        "year",
+        "type",
+        "citation_count",
+        "venue",
+        "institution",
+        "author",
+        "country",
+    ]
+
+    with output_csv.open(
+        "w",
+        newline="",
+        encoding="utf-8",
+    ) as f:
+
+        writer = csv.DictWriter(
+            f,
+            fieldnames=fieldnames,
+        )
+
+        writer.writeheader()
+        writer.writerows(rows)
+
+    print(f"Saved {len(rows)} papers to {output_csv}")
+
+    return output_csv
+
+
+
+
+
+
+
+
+
+
+他好像有照我設定的把26個topic爬完，但為什麼他
+
+
+[50] Paper: Increased graft-versus-host susceptibili... | Score: 1 | Expl: The abstract directly addresses thymectomy, graft-versus-host reactions, and inc...
+📊 Final Gate Audit Result: 50 papers PASSED semantic verification.
+   🟢 [SUCCESS] Gate passed! Topic T12281 secured 50 gold works.
+   💾 Successfully stored 50 clean papers to: ../out/topics/T12281/final_verified_papers.json
+  Selected cluster 9: Thymus immunology in rodent models
+
+Saved dataset CSV with 26 rows to: ../data/openalex/openalex_dataset.csv
+Loading topics: ../data/openalex/topics.json
+Saved selected OpenAlex topics to: ../data/openalex/selected_topics.json
+Skipping T14124: missing out/topics/T14124/representatives_top20.json接下來都是類似這行
+
+我想問爲什麼我設定：
+create_openalex_dataset(n_per_field=1, works_n=8000, random_state=42)
+
+def create_openalex_dataset(n_per_field: int = 10, works_n: int = 10000, random_state: int = 42):
+    """
+    Create the OpenAlex-based benchmark dataset by running:
+      - topic selection (stratified by field),
+      - work retrieval (cached),
+      - clustering,
+      - TopicGPT labeling,
+      - final cluster selection (confidence=="high", dedup by identical topic_name, then best score).
+
+    Stores a CSV with columns:
+      - Topic (ours)            -> TopicGPT selected topic_name
+      - Description (ours)      -> TopicGPT selected description
+      - OpenAlex-Topic          -> "<openalex_display_name> (<topic_id>)"
+      - Field                  -> "<field_display_name> (<field_id>)"
+
+    :param n_per_field: number of OpenAlex topics sampled per field
+    :param works_n: number of complete works to retrieve per topic (get_works_for_topic handles top-up)
+    :param random_state: random seed used for topic selection + work sampling
+    """
+    print("start")
+    out_csv: str = os.path.join("../data", "openalex", "openalex_dataset.csv")
+    os.makedirs(os.path.dirname(out_csv), exist_ok=True)
+    
+    # -----------------------------
+    # Select OpenAlex topics (stratified by field)
+    # -----------------------------
+    topics_by_field: dict[str, list[str]] = select_openalex_topics(n=n_per_field, random_state=random_state)
+
+    # Flatten topic URLs
+    topic_urls: list[str] = []
+    for _field_name, topic_ids in topics_by_field.items():
+        for tid in topic_ids:
+            tid = str(tid).strip()
+            if not tid:
+                continue
+            # allow either full URL or bare id
+            if tid.startswith("http"):
+                topic_urls.append(tid.rstrip("/"))
+            else:
+                topic_urls.append(f"https://openalex.org/{tid}".rstrip("/"))
+
+    if not topic_urls:
+        print("No topics selected.")
+        return
+
+    # -----------------------------
+    # Load OpenAlex topic metadata for name + field (id/name)
+    # -----------------------------
+    oa_topics: list[dict[str, Any]] = get_openalex_topics()
+    topic_meta_by_id: dict[str, dict[str, Any]] = {}
+
+    for t in oa_topics:
+        if not isinstance(t, dict):
+            continue
+        tid = str(t.get("id", "")).rstrip("/")
+        if not tid:
+            continue
+        topic_meta_by_id[tid] = t
+        # also index by bare id (Txxxxx) for convenience
+        topic_meta_by_id[tid.split("/")[-1]] = t
+
+    # -----------------------------
+    # Prepare CSV writer
+    # -----------------------------
+    rows: list[dict[str, str]] = []
+
+    total = len(topic_urls)
+    for i, topic_url in enumerate(topic_urls, 1):
+        topic_url = topic_url.rstrip("/")
+        topic_id = topic_url.split("/")[-1]
+
+        print(f"\n[{i}/{total}] Processing topic {topic_id} ...")
+
+        # Metadata lookup
+        meta = topic_meta_by_id.get(topic_url) or topic_meta_by_id.get(topic_id) or {}
+        oa_display_name = str(meta.get("display_name", "")).strip() or topic_id
+
+        field_obj = meta.get("field") if isinstance(meta, dict) else None
+        field_id = ""
+        field_name = ""
+        if isinstance(field_obj, dict):
+            field_id = str(field_obj.get("id", "")).strip()
+            field_name = str(field_obj.get("display_name", "")).strip()
+
+        # Format as requested: name + id
+        openalex_topic_str = f"{oa_display_name} ({topic_id})"
+        if field_name and field_id:
+            field_str = f"{field_name} ({field_id.split('/')[-1]})"
+        elif field_name:
+            field_str = field_name
+        elif field_id:
+            field_str = field_id
+        else:
+            field_str = ""
+
+        # -----------------------------
+        # Run pipeline (with safety)
+        # -----------------------------
+        try:
+            get_works_for_topic(topic_url=topic_url, n=works_n, random_state=random_state)
+        except Exception as e:
+            print(f"  [ERROR] get_works_for_topic failed for {topic_id}: {e}")
+            continue
+
+        selected_cluster = None
+        selected_payload = {}
+        final_verified_papers = []
+        verified_papers=[]
+        current_reps_budget = 50  
+        loop_round = 1
+        max_resample_attempts = 4
+
+        while loop_round <= max_resample_attempts:
+            print(f"🔄 Pipeline round {loop_round} , select {current_reps_budget} works in a cluster...")
+            
+            try:
+                cluster_topic(topic_url=topic_url, representative_abstracts=current_reps_budget)
+                _labels = run_topic_gpt(topic_url=topic_url, representative_abstracts=current_reps_budget)
+                selected_cluster, selected_payload = select_topic_from_topicgpt(topic_url=topic_url)
+
+                # 🚀 獨立保護把關機制：crashed 時設為 0，但不中斷這一輪的點數檢查
+                try:
+                    gold_passed_count, verified_papers = run_llm_final_check(
+                        topic_url=topic_url,
+                        selected_cluster=selected_cluster,
+                        representative_abstracts=current_reps_budget
+                    )
+                except Exception as check_err:
+                    print(f"  [ERROR] LLM Final Gate crashed: {check_err}")
+                    gold_passed_count = 0
+                
+                print(f"   📊 Final Gate Audit Result: {gold_passed_count} papers PASSED semantic verification.")
+                
+                if gold_passed_count >= 20:
+                    print(f"   🟢 [SUCCESS] Gate passed! Topic {topic_id} secured {gold_passed_count} gold works.")
+                    final_verified_papers = verified_papers
+                    break 
+                else:
+                    print(f"   ⚠️ [GATE BLOCKED] Only {gold_passed_count} clean works found < 20.")
+                    
+            except Exception as e:
+                print(f"  [ERROR] Pipeline step failed in round {loop_round} for {topic_id}: {e}")
+
+            # ─── 統一的升級策略（不論是步驟崩潰，還是閥值未達標，通通走到這裡） ───
+            current_reps_budget += 20  # 50 -> 70 -> 90 -> 110
+            loop_round += 1
+            if loop_round <= max_resample_attempts:
+                print(f"   🚀 [SCALING POOL] Expanding search budget to top{current_reps_budget} in the best cluster for the next round...")
+        
+        # --
+        if final_verified_papers:
+            final_save_path = os.path.join("../out", "topics", topic_id, "final_verified_papers.json")
+            try:
+                with open(final_save_path, "w", encoding="utf-8") as f:
+                    json.dump({
+                        "topic_id": topic_id,
+                        "topic_name": selected_payload.get("topic_name", ""),
+                        "total_verified": len(final_verified_papers),
+                        "budget_used": current_reps_budget,
+                        "papers": final_verified_papers
+                    }, f, ensure_ascii=False, indent=2)
+                print(f"   💾 Successfully stored {len(final_verified_papers)} clean papers to: {final_save_path}")
+            except Exception as save_err:
+                print(f"   [ERROR] Failed to save gold verified papers for {topic_id}: {save_err}")
+
+        # ─── 脫離迴圈，安全寫入結果 ───
+        ours_topic = str(selected_payload.get("topic_name", "")).strip()
+        ours_desc = str(selected_payload.get("description", "")).strip()
+
+        if not ours_topic:
+            ours_topic = f"(missing topic_name) cluster={selected_cluster}"
+
+        rows.append({
+            "Topic": ours_topic,
+            "Description": ours_desc,
+            "OpenAlex-Topic": openalex_topic_str,
+            "Field": field_str,
+        })
+
+        print(f"  Selected cluster {selected_cluster}: {ours_topic}")
+
+    # -----------------------------
+    # Write CSV
+    # -----------------------------
+    with open(out_csv, "w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=["Topic", "Description", "OpenAlex-Topic", "Field"],
+            quoting=csv.QUOTE_MINIMAL,
+        )
+        writer.writeheader()
+        for r in rows:
+            writer.writerow(r)
+
+    print(f"\nSaved dataset CSV with {len(rows)} rows to: {out_csv}")
+
+如果總共有26個feild 那每個feild跑1個topic, 跑完26個topic就應該結束？為什麼還會繼續找？而且我也不知道skip的邏輯寫在哪？
+如果找不到representitive的檔案不是應該會製作他嗎？為什麼會skip?

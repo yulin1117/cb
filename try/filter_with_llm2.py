@@ -3,7 +3,7 @@ from collections import Counter
 import csv 
 import json
 import re
-from test2 import fetch_unfiltered_raw_works,reconstruct_abstract  # 從 test2.py 中匯入原始資料撈取函式
+from CitationBias.test.test2 import fetch_unfiltered_raw_works,reconstruct_abstract  # 從 test2.py 中匯入原始資料撈取函式
 # 嘗試安全匯入 vLLM 與 transformers 相關套件
 try:
     from vllm import LLM as VLLMEngine, SamplingParams

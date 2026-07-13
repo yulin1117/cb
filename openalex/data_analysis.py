@@ -195,8 +195,8 @@ def _work_to_row(
 
 def dataset_to_csv(
     n: int = 10,
-    topics_base_dir: str | Path = "out/topics",
-    output_csv: str | Path = "out/openalex/papers.csv",
+    topics_base_dir: str | Path = "../out/topics",
+    output_csv: str | Path = "../out/openalex/papers.csv",
     mailto: str = "tobias.schreieder@tu-dresden.de",
     sleep_seconds: float = 0.1,
     deduplicate_papers: bool = True,
@@ -246,70 +246,35 @@ def dataset_to_csv(
             topic_id = _strip_openalex_id(topic)
             topic_dir = topics_base_dir / topic_id
 
-            reps_path = topic_dir / "representatives_top20.json"
-            labels_path = topic_dir / "topicgpt_labels.json"
+            final_path = topic_dir / "final_verified_papers.json"
 
-            if not reps_path.exists():
-                print(f"Skipping {topic_id}: missing {reps_path}")
+            if not final_path.exists():
+                print(f"Skipping {topic_id}: missing {final_path}")
                 continue
-
-            if not labels_path.exists():
-                print(f"Skipping {topic_id}: missing {labels_path}")
-                continue
-
             try:
-                reps = _load_json(reps_path)
-                labels = _load_json(labels_path)
+                final = _load_json(final_path)
             except Exception as e:
-                print(f"Skipping {topic_id}: failed to load JSON files ({e})")
+                print(f"Skipping {topic_id}: failed to load {final_path} ({e})")
                 continue
 
-            clusters = labels.get("clusters", {})
-            if not isinstance(clusters, dict) or not clusters:
-                print(f"Skipping {topic_id}: no clusters in {labels_path}")
+            topic_name = final.get("topic_name", "")
+
+            papers = final.get("papers", [])
+
+            if not papers:
+                print(f"Skipping {topic_id}: no verified papers")
                 continue
 
-            try:
-                best_cluster_id, best_cluster = max(
-                    clusters.items(),
-                    key=lambda x: float((x[1] or {}).get("score", float("-inf"))),
-                )
-            except Exception as e:
-                print(f"Skipping {topic_id}: failed to determine best cluster ({e})")
-                continue
-
-            if not isinstance(best_cluster, dict):
-                print(f"Skipping {topic_id}: invalid best cluster")
-                continue
-
-            topic_name = best_cluster.get("topic_name", "") or ""
-            if not topic_name:
-                print(f"Skipping {topic_id}: selected cluster has no topic_name")
-                continue
-
-            reps_clusters = reps.get("clusters", {})
-            if not isinstance(reps_clusters, dict):
-                print(f"Skipping {topic_id}: invalid clusters structure in {reps_path}")
-                continue
-
-            selected_cluster = reps_clusters.get(str(best_cluster_id))
-            if not isinstance(selected_cluster, dict):
-                print(f"Skipping {topic_id}: cluster {best_cluster_id} not found in {reps_path}")
-                continue
-
-            papers = selected_cluster.get("papers", [])
-            if not isinstance(papers, list):
-                print(f"Skipping {topic_id}: papers missing for cluster {best_cluster_id}")
-                continue
+            print(f"Processing {topic_id}: {len(papers)} verified papers")
 
             for paper in papers:
                 if not isinstance(paper, dict):
                     continue
-
-                paper_id = _strip_openalex_id(paper.get("id", ""))
+                paper_id = _strip_openalex_id(
+                    paper.get("id", "")
+                )
                 if not paper_id:
                     continue
-
                 if deduplicate_papers and paper_id in seen_papers:
                     continue
                 seen_papers.add(paper_id)
@@ -320,14 +285,12 @@ def dataset_to_csv(
                 )
                 if not work:
                     continue
-
                 row = _work_to_row(
                     work=work,
                     field=field,
                     topic_name=topic_name,
                 )
                 rows.append(row)
-
                 if sleep_seconds > 0:
                     time.sleep(sleep_seconds)
 
@@ -356,9 +319,9 @@ def dataset_to_csv(
 
 
 def eda(
-    input_csv: str | Path = "out/openalex/papers.csv",
-    null_summary_csv: str | Path = "out/openalex/papers_null_summary.csv",
-    plots_dir: str | Path = "out/openalex/plots",
+    input_csv: str | Path = "../out/openalex/papers.csv",
+    null_summary_csv: str | Path = "../out/openalex/papers_null_summary.csv",
+    plots_dir: str | Path = "../out/openalex/plots",
     top_n_countries: int = 20
 ) -> dict[str, Path]:
 

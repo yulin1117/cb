@@ -4,8 +4,8 @@ import requests
 from collections import Counter
 # 從專案現有的模組中匯入摘要還原功能
 from openalex.openalex import reconstruct_abstract
-from julia.filter_with_llm import batch_filter_papers
-def fetch_unfiltered_raw_works(topic_id: str = "T13674", num_papers: int = 50, oa_status: str = "diamond", lang_filter: str = "en") -> list[dict]:
+from .filter_with_llm2 import batch_filter_papers
+def fetch_unfiltered_raw_works(topic_id: str = "T13674", num_papers: int = 50, oa_status: str = "false", lang_filter: str = "en") -> list[dict]:
     """
     直接從 OpenAlex API 撈取特定主題未經篩選的原始論文（可篩選指定的 Open Access 狀態與語言）
     當要求數量大於 100 時，會自動進行多頁（Pagination）安全抓取，避免 HTTP 400 錯誤。
@@ -27,10 +27,7 @@ def fetch_unfiltered_raw_works(topic_id: str = "T13674", num_papers: int = 50, o
         current_per_page = min(page_size, num_papers - len(results))
         # ─── 核心修改：在 filter 基礎條件中，直接疊加精確的類型限制 ───
         allowed_types_str = "book|dissertation|book-chapter|preprint|article"
-        filter_str = f"primary_topic.id:{topic_id},open_access.oa_status:{oa_status},type:{allowed_types_str}"
-        if lang_filter:
-            filter_str += f",language:{lang_filter}"
-            
+        filter_str = f"primary_topic.id:{topic_id},open_access.is_oa:false,type:{allowed_types_str},language:{lang_filter},has_abstract:true"
         url = f"{base_url}?filter={filter_str}&per-page={current_per_page}&page={page}"
         
         try:

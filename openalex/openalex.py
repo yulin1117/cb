@@ -4,6 +4,7 @@ import requests
 import random
 import time
 import csv
+import torch
 import hashlib
 from collections import Counter
 from nltk.tokenize import sent_tokenize
@@ -63,12 +64,11 @@ def _get_fasttext_model():
     _ft_model = fasttext.load_model(FASTTEXT_MODEL_PATH)
     return _ft_model
 
-
-def _get_sentence_transformer_model():
-    _st_model = None
-    ST_MODEL_NAME = "all-MiniLM-L6-v2"
-    _st_model = SentenceTransformer(ST_MODEL_NAME)
-    return _st_model
+def _get_specter_model():
+    print(f"Initializing baseline Embedding Model ('allenai/specter2_base')...")
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    _specter_model = SentenceTransformer("allenai/specter2_base", device=device)
+    return _specter_model 
 
 
 def lang_detect(text, model, threshold=0.2):
@@ -116,7 +116,6 @@ def content_detect(title: str, abstract: str, st_model) -> bool:
         except Exception:
             return False  # Fail-safe reject on vectorization error
     return True
-
 
 def reconstruct_abstract(abstract_inverted_index):
     """Safely rebuild abstract from OpenAlex abstract_inverted_index."""
@@ -205,7 +204,7 @@ def get_works_for_topic(topic_url: str, n: int = 5000, random_state: int = 42,
         "report",
     }
     ft_model=_get_fasttext_model()
-    st_model=_get_sentence_transformer_model()
+    st_model=_get_specter_model()
     def is_complete_work(w: dict) -> bool:
         """Apply the same screening as load_topic_title_abstract() would."""
         if w.get("type") not in ALLOWED_TYPES:
