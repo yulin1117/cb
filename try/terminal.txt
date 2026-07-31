@@ -1,0 +1,352 @@
+(myenv) [yuzh952h@i8023.alpha CitationBias]$ python playground.py
+start
+Loading topics: ../data/openalex/topics.json
+
+[1/26] Processing topic T11418 ...
+Loading works from disk: ../data/openalex/T11418_works.json
+[CACHE-CLUSTER] Topic T11418 already has cluster_papers.json. Parsing...
+[[CACHE-CLUSTER] Found saved selected_cluster ID: 11
+🔄 Pipeline round 1 | Budget: top 50 works in Cluster 11...
+[CACHE-LLM] Topic T11418 already has final_verified_papers.json. Parsing...
+[CACHE-LLM] Successfully loaded 20 verified papers from cache.
+   📊 Final Gate Audit Result: 20 papers PASSED semantic verification.
+   🟢 [SUCCESS] Gate passed! Topic T11418 secured 20 gold works.
+🏷️ [TopicGPT] Generating topic name & description using 20 clean papers...
+[CACHE-GPT] TopicGPT labels already exist. Loading...
+   💾 Successfully stored 20 clean papers to: ../out/topics/T11418/final_verified_papers.json
+  Completed topic T11418 -> Cluster 11: Trace Mineral Interactions in Animals
+
+[2/26] Processing topic T10366 ...
+Loading works from disk: ../data/openalex/T10366_works.json
+[CACHE-CLUSTER] Topic T10366 already has cluster_papers.json. Parsing...
+[[CACHE-CLUSTER] Found saved selected_cluster ID: 24
+🔄 Pipeline round 1 | Budget: top 50 works in Cluster 24...
+[CACHE-LLM] Topic T10366 already has final_verified_papers.json. Parsing...
+[CACHE-LLM] Successfully loaded 20 verified papers from cache.
+   📊 Final Gate Audit Result: 20 papers PASSED semantic verification.
+   🟢 [SUCCESS] Gate passed! Topic T10366 secured 20 gold works.
+🏷️ [TopicGPT] Generating topic name & description using 20 clean papers...
+[CACHE-GPT] TopicGPT labels already exist. Loading...
+   💾 Successfully stored 20 clean papers to: ../out/topics/T10366/final_verified_papers.json
+  Completed topic T10366 -> Cluster 24: Rhetoric and Composition
+
+[3/26] Processing topic T10066 ...
+Loading works from disk: ../data/openalex/T10066_works.json
+Loading works from disk: ../data/openalex/T10066_works.json
+Initializing baseline Embedding Model ('allenai/specter2_base')...
+Loading weights: 100%|█| 199/199 [00:00<00:0
+Loaded 8000 papers. Computing embeddings (allenai/specter2_base)...
+Batches: 100%|█| 250/250 [00:42<00:00,  5.84
+Embeddings computed. Shape: (8000, 768)
+/data/horse/ws/yuzh952h-cb/myenv/lib/python3.13/site-packages/umap/umap_.py:1952: UserWarning: n_jobs value 1 overridden to 1 by setting random_state. Use no seed for parallelism.
+  warn(
+HDBSCAN clusters: 39 (noise docs: 3163)
+Saved cluster scores to: ../out/topics/T10066/cluster_scores.tsv
+Returning top-10 candidate clusters by score (top_k_candidates=10).
+Saved FULL cluster papers JSON to: ../out/topics/T10066/cluster_papers.json
+🔄 Pipeline round 1 | Budget: top 50 works in Cluster 25...
+  🔍 Budget requested: top50 | New papers to audit via LLM: 50
+[LLM Final Gate] Auditing 50 papers from selected Cluster 25...
+Processing papers: 100%|█| 50/50 [07:43<00:0
+  💾 Updated audit cache (50 total records) saved to: ../out/topics/T10066/audit_results.json
+   📊 Final Gate Audit Result: 43 papers PASSED semantic verification.
+   🟢 [SUCCESS] Gate passed! Topic T10066 secured 43 gold works.
+🏷️ [TopicGPT] Generating topic name & description using 20 clean papers...
+Saved verified TopicGPT labels to: ../out/topics/T10066/topicgpt_labels.json
+   💾 Successfully stored 20 clean papers to: ../out/topics/T10066/final_verified_papers.json
+  Completed topic T10066 -> Cluster 25: Gut microbial ecology
+
+[4/26] Processing topic T11734 ...
+Loading works from disk: ../data/openalex/T11734_works.json
+[CACHE-CLUSTER] Topic T11734 already has cluster_papers.json. Parsing...
+[[CACHE-CLUSTER] Found saved selected_cluster ID: 1
+🔄 Pipeline round 1 | Budget: top 50 works in Cluster 1...
+[CACHE-LLM] Topic T11734 already has final_verified_papers.json. Parsing...
+[CACHE-LLM] Successfully loaded 20 verified papers from cache.
+   📊 Final Gate Audit Result: 20 papers PASSED semantic verification.
+   🟢 [SUCCESS] Gate passed! Topic T11734 secured 20 gold works.
+🏷️ [TopicGPT] Generating topic name & description using 20 clean papers...
+[CACHE-GPT] TopicGPT labels already exist. Loading...
+   💾 Successfully stored 20 clean papers to: ../out/topics/T11734/final_verified_papers.json
+  Completed topic T11734 -> Cluster 1: Route Optimization in Transportation and Logistics
+
+[5/26] Processing topic T11936 ...
+Loading works from disk: ../data/openalex/T11936_works.json
+Loading works from disk: ../data/openalex/T11936_works.json
+Initializing baseline Embedding Model ('allenai/specter2_base')...
+Loading weights: 100%|█| 199/199 [00:00<00:0
+Loaded 6532 papers. Computing embeddings (allenai/specter2_base)...
+Batches: 100%|█| 205/205 [00:30<00:00,  6.82
+Embeddings computed. Shape: (6532, 768)
+/data/horse/ws/yuzh952h-cb/myenv/lib/python3.13/site-packages/umap/umap_.py:1952: UserWarning: n_jobs value 1 overridden to 1 by setting random_state. Use no seed for parallelism.
+  warn(
+HDBSCAN clusters: 31 (noise docs: 2976)
+Saved cluster scores to: ../out/topics/T11936/cluster_scores.tsv
+Returning top-10 candidate clusters by score (top_k_candidates=10).
+Saved FULL cluster papers JSON to: ../out/topics/T11936/cluster_papers.json
+🔄 Pipeline round 1 | Budget: top 50 works in Cluster 15...
+  🔍 Budget requested: top50 | New papers to audit via LLM: 50
+[LLM Final Gate] Auditing 50 papers from selected Cluster 15...
+Processing papers: 100%|█| 50/50 [23:03<00:0
+  💾 Updated audit cache (50 total records) saved to: ../out/topics/T11936/audit_results.json
+   📊 Final Gate Audit Result: 33 papers PASSED semantic verification.
+   🟢 [SUCCESS] Gate passed! Topic T11936 secured 33 gold works.
+🏷️ [TopicGPT] Generating topic name & description using 20 clean papers...
+Saved verified TopicGPT labels to: ../out/topics/T11936/topicgpt_labels.json
+   💾 Successfully stored 20 clean papers to: ../out/topics/T11936/final_verified_papers.json
+  Completed topic T11936 -> Cluster 15: Aqueous Salt Phase Equilibria
+
+[6/26] Processing topic T10807 ...
+Loading works from disk: ../data/openalex/T10807_works.json
+[CACHE-CLUSTER] Topic T10807 already has cluster_papers.json. Parsing...
+[[CACHE-CLUSTER] Found saved selected_cluster ID: 0
+🔄 Pipeline round 1 | Budget: top 50 works in Cluster 0...
+[CACHE-LLM] Topic T10807 already has final_verified_papers.json. Parsing...
+[CACHE-LLM] Successfully loaded 20 verified papers from cache.
+   📊 Final Gate Audit Result: 20 papers PASSED semantic verification.
+   🟢 [SUCCESS] Gate passed! Topic T10807 secured 20 gold works.
+🏷️ [TopicGPT] Generating topic name & description using 20 clean papers...
+[CACHE-GPT] TopicGPT labels already exist. Loading...
+   💾 Successfully stored 20 clean papers to: ../out/topics/T10807/final_verified_papers.json
+  Completed topic T10807 -> Cluster 0: Structural chemistry of main-group compounds
+
+[7/26] Processing topic T14335 ...
+Loading works from disk: ../data/openalex/T14335_works.json
+[CACHE-CLUSTER] Topic T14335 already has cluster_papers.json. Parsing...
+[[CACHE-CLUSTER] Found saved selected_cluster ID: 9
+🔄 Pipeline round 1 | Budget: top 50 works in Cluster 9...
+[CACHE-LLM] Topic T14335 already has final_verified_papers.json. Parsing...
+[CACHE-LLM] Successfully loaded 20 verified papers from cache.
+   📊 Final Gate Audit Result: 20 papers PASSED semantic verification.
+   🟢 [SUCCESS] Gate passed! Topic T14335 secured 20 gold works.
+🏷️ [TopicGPT] Generating topic name & description using 20 clean papers...
+[CACHE-GPT] TopicGPT labels already exist. Loading...
+   💾 Successfully stored 20 clean papers to: ../out/topics/T14335/final_verified_papers.json
+  Completed topic T14335 -> Cluster 9: Engineering Professional Society Activities
+
+[8/26] Processing topic T11443 ...
+Loading works from disk: ../data/openalex/T11443_works.json
+[CACHE-CLUSTER] Topic T11443 already has cluster_papers.json. Parsing...
+[[CACHE-CLUSTER] Found saved selected_cluster ID: 8
+🔄 Pipeline round 1 | Budget: top 50 works in Cluster 8...
+[CACHE-LLM] Topic T11443 already has final_verified_papers.json. Parsing...
+[CACHE-LLM] Successfully loaded 20 verified papers from cache.
+   📊 Final Gate Audit Result: 20 papers PASSED semantic verification.
+   🟢 [SUCCESS] Gate passed! Topic T11443 secured 20 gold works.
+🏷️ [TopicGPT] Generating topic name & description using 20 clean papers...
+[CACHE-GPT] TopicGPT labels already exist. Loading...
+   💾 Successfully stored 20 clean papers to: ../out/topics/T11443/final_verified_papers.json
+  Completed topic T11443 -> Cluster 8: Sequential Change-Point Detection
+
+[9/26] Processing topic T12439 ...
+Loading works from disk: ../data/openalex/T12439_works.json
+Loading works from disk: ../data/openalex/T12439_works.json
+Initializing baseline Embedding Model ('allenai/specter2_base')...
+Loading weights: 100%|█| 199/199 [00:00<00:0
+Loaded 8000 papers. Computing embeddings (allenai/specter2_base)...
+Batches: 100%|█| 250/250 [00:39<00:00,  6.28
+Embeddings computed. Shape: (8000, 768)
+/data/horse/ws/yuzh952h-cb/myenv/lib/python3.13/site-packages/umap/umap_.py:1952: UserWarning: n_jobs value 1 overridden to 1 by setting random_state. Use no seed for parallelism.
+  warn(
+HDBSCAN clusters: 42 (noise docs: 3599)
+Saved cluster scores to: ../out/topics/T12439/cluster_scores.tsv
+Returning top-10 candidate clusters by score (top_k_candidates=10).
+Saved FULL cluster papers JSON to: ../out/topics/T12439/cluster_papers.json
+🔄 Pipeline round 1 | Budget: top 50 works in Cluster 3...
+  🔍 Budget requested: top50 | New papers to audit via LLM: 50
+[LLM Final Gate] Auditing 50 papers from selected Cluster 3...
+Processing papers: 100%|█| 50/50 [09:32<00:0
+  💾 Updated audit cache (50 total records) saved to: ../out/topics/T12439/audit_results.json
+   📊 Final Gate Audit Result: 45 papers PASSED semantic verification.
+   🟢 [SUCCESS] Gate passed! Topic T12439 secured 45 gold works.
+🏷️ [TopicGPT] Generating topic name & description using 20 clean papers...
+Saved verified TopicGPT labels to: ../out/topics/T12439/topicgpt_labels.json
+   💾 Successfully stored 20 clean papers to: ../out/topics/T12439/final_verified_papers.json
+  Completed topic T12439 -> Cluster 3: Digital Dentistry
+
+[10/26] Processing topic T11234 ...
+Loading works from disk: ../data/openalex/T11234_works.json
+Loading works from disk: ../data/openalex/T11234_works.json
+Initializing baseline Embedding Model ('allenai/specter2_base')...
+Loading weights: 100%|█| 199/199 [00:00<00:0
+Loaded 8000 papers. Computing embeddings (allenai/specter2_base)...
+Batches: 100%|█| 250/250 [00:36<00:00,  6.85
+Embeddings computed. Shape: (8000, 768)
+/data/horse/ws/yuzh952h-cb/myenv/lib/python3.13/site-packages/umap/umap_.py:1952: UserWarning: n_jobs value 1 overridden to 1 by setting random_state. Use no seed for parallelism.
+  warn(
+HDBSCAN clusters: 31 (noise docs: 3584)
+Saved cluster scores to: ../out/topics/T11234/cluster_scores.tsv
+Returning top-10 candidate clusters by score (top_k_candidates=10).
+Saved FULL cluster papers JSON to: ../out/topics/T11234/cluster_papers.json
+🔄 Pipeline round 1 | Budget: top 50 works in Cluster 6...
+  🔍 Budget requested: top50 | New papers to audit via LLM: 50
+[LLM Final Gate] Auditing 50 papers from selected Cluster 6...
+Processing papers: 100%|█| 50/50 [08:37<00:0
+  💾 Updated audit cache (50 total records) saved to: ../out/topics/T11234/audit_results.json
+   📊 Final Gate Audit Result: 48 papers PASSED semantic verification.
+   🟢 [SUCCESS] Gate passed! Topic T11234 secured 48 gold works.
+🏷️ [TopicGPT] Generating topic name & description using 20 clean papers...
+Saved verified TopicGPT labels to: ../out/topics/T11234/topicgpt_labels.json
+   💾 Successfully stored 20 clean papers to: ../out/topics/T11234/final_verified_papers.json
+  Completed topic T11234 -> Cluster 6: Satellite Precipitation Retrieval
+
+[11/26] Processing topic T10785 ...
+Loading works from disk: ../data/openalex/T10785_works.json
+[CACHE-CLUSTER] Topic T10785 already has cluster_papers.json. Parsing...
+[[CACHE-CLUSTER] Found saved selected_cluster ID: 12
+🔄 Pipeline round 1 | Budget: top 50 works in Cluster 12...
+[CACHE-LLM] Topic T10785 already has final_verified_papers.json. Parsing...
+[CACHE-LLM] Successfully loaded 20 verified papers from cache.
+   📊 Final Gate Audit Result: 20 papers PASSED semantic verification.
+   🟢 [SUCCESS] Gate passed! Topic T10785 secured 20 gold works.
+🏷️ [TopicGPT] Generating topic name & description using 20 clean papers...
+[CACHE-GPT] TopicGPT labels already exist. Loading...
+   💾 Successfully stored 20 clean papers to: ../out/topics/T10785/final_verified_papers.json
+  Completed topic T10785 -> Cluster 12: History of Economic Thought
+
+[12/26] Processing topic T11007 ...
+Loading works from disk: ../data/openalex/T11007_works.json
+Loading works from disk: ../data/openalex/T11007_works.json
+Initializing baseline Embedding Model ('allenai/specter2_base')...
+Loading weights: 100%|█| 199/199 [00:00<00:0
+Loaded 8000 papers. Computing embeddings (allenai/specter2_base)...
+Batches: 100%|█| 250/250 [00:36<00:00,  6.78
+Embeddings computed. Shape: (8000, 768)
+/data/horse/ws/yuzh952h-cb/myenv/lib/python3.13/site-packages/umap/umap_.py:1952: UserWarning: n_jobs value 1 overridden to 1 by setting random_state. Use no seed for parallelism.
+  warn(
+HDBSCAN clusters: 33 (noise docs: 4227)
+Saved cluster scores to: ../out/topics/T11007/cluster_scores.tsv
+Returning top-10 candidate clusters by score (top_k_candidates=10).
+Saved FULL cluster papers JSON to: ../out/topics/T11007/cluster_papers.json
+🔄 Pipeline round 1 | Budget: top 50 works in Cluster 23...
+  🔍 Budget requested: top50 | New papers to audit via LLM: 50
+[LLM Final Gate] Auditing 50 papers from selected Cluster 23...
+Processing papers: 100%|█| 50/50 [08:48<00:0
+  💾 Updated audit cache (50 total records) saved to: ../out/topics/T11007/audit_results.json
+   📊 Final Gate Audit Result: 38 papers PASSED semantic verification.
+   🟢 [SUCCESS] Gate passed! Topic T11007 secured 38 gold works.
+🏷️ [TopicGPT] Generating topic name & description using 20 clean papers...
+Saved verified TopicGPT labels to: ../out/topics/T11007/topicgpt_labels.json
+   💾 Successfully stored 20 clean papers to: ../out/topics/T11007/final_verified_papers.json
+  Completed topic T11007 -> Cluster 23: Hydrogen Production, Storage, and Utilization
+
+[13/26] Processing topic T13645 ...
+Loading works from disk: ../data/openalex/T13645_works.json
+[CACHE-CLUSTER] Topic T13645 already has cluster_papers.json. Parsing...
+[[CACHE-CLUSTER] Found saved selected_cluster ID: 20
+🔄 Pipeline round 1 | Budget: top 50 works in Cluster 20...
+[CACHE-LLM] Topic T13645 already has final_verified_papers.json. Parsing...
+[CACHE-LLM] Successfully loaded 20 verified papers from cache.
+   📊 Final Gate Audit Result: 20 papers PASSED semantic verification.
+   🟢 [SUCCESS] Gate passed! Topic T13645 secured 20 gold works.
+🏷️ [TopicGPT] Generating topic name & description using 20 clean papers...
+[CACHE-GPT] TopicGPT labels already exist. Loading...
+   💾 Successfully stored 20 clean papers to: ../out/topics/T13645/final_verified_papers.json
+  Completed topic T13645 -> Cluster 20: Electrical Transport in Metallic Systems
+
+[14/26] Processing topic T12543 ...
+Loading works from disk: ../data/openalex/T12543_works.json
+[CACHE-CLUSTER] Topic T12543 already has cluster_papers.json. Parsing...
+[[CACHE-CLUSTER] Found saved selected_cluster ID: 32
+🔄 Pipeline round 1 | Budget: top 50 works in Cluster 32...
+[CACHE-LLM] Topic T12543 already has final_verified_papers.json. Parsing...
+[CACHE-LLM] Successfully loaded 20 verified papers from cache.
+   📊 Final Gate Audit Result: 20 papers PASSED semantic verification.
+   🟢 [SUCCESS] Gate passed! Topic T12543 secured 20 gold works.
+🏷️ [TopicGPT] Generating topic name & description using 20 clean papers...
+[CACHE-GPT] TopicGPT labels already exist. Loading...
+   💾 Successfully stored 20 clean papers to: ../out/topics/T12543/final_verified_papers.json
+  Completed topic T12543 -> Cluster 32: Groundwater Resource Assessment and Management
+
+[15/26] Processing topic T13861 ...
+Loading works from disk: ../data/openalex/T13861_works.json
+Loading works from disk: ../data/openalex/T13861_works.json
+Initializing baseline Embedding Model ('allenai/specter2_base')...
+Loading weights: 100%|█| 199/199 [00:00<00:0
+Loaded 6150 papers. Computing embeddings (allenai/specter2_base)...
+Batches: 100%|█| 193/193 [00:29<00:00,  6.51
+Embeddings computed. Shape: (6150, 768)
+/data/horse/ws/yuzh952h-cb/myenv/lib/python3.13/site-packages/umap/umap_.py:1952: UserWarning: n_jobs value 1 overridden to 1 by setting random_state. Use no seed for parallelism.
+  warn(
+HDBSCAN clusters: 31 (noise docs: 3147)
+Saved cluster scores to: ../out/topics/T13861/cluster_scores.tsv
+Returning top-10 candidate clusters by score (top_k_candidates=10).
+Saved FULL cluster papers JSON to: ../out/topics/T13861/cluster_papers.json
+🔄 Pipeline round 1 | Budget: top 50 works in Cluster 3...
+  🔍 Budget requested: top50 | New papers to audit via LLM: 50
+[LLM Final Gate] Auditing 50 papers from selected Cluster 3...
+Processing papers: 100%|█| 50/50 [10:26<00:0
+  💾 Updated audit cache (50 total records) saved to: ../out/topics/T13861/audit_results.json
+   📊 Final Gate Audit Result: 45 papers PASSED semantic verification.
+   🟢 [SUCCESS] Gate passed! Topic T13861 secured 45 gold works.
+🏷️ [TopicGPT] Generating topic name & description using 20 clean papers...
+Saved verified TopicGPT labels to: ../out/topics/T13861/topicgpt_labels.json
+   💾 Successfully stored 20 clean papers to: ../out/topics/T13861/final_verified_papers.json
+  Completed topic T13861 -> Cluster 3: University Students' Lifestyle and Physical Activity
+
+[16/26] Processing topic T10695 ...
+Calling OpenAlex API for topic T10695 (target n=8000, base_seed=42)
+Warning : `load_model` does not return WordVectorModel or SupervisedModel any more, but a `FastText` object which is very similar.
+Initializing baseline Embedding Model ('allenai/specter2_base')...
+Loading weights: 100%|█| 199/199 [00:00<00:0
+  Round 1/10: request sample=8000, seed=42
+    added_complete=5015, total_complete=5015
+  Round 2/10: request sample=2985, seed=43
+    added_complete=1446, total_complete=6461
+  Round 3/10: request sample=2000, seed=44
+    added_complete=919, total_complete=7380
+  Round 4/10: request sample=2000, seed=45
+    added_complete=620, total_complete=8000
+Saved 8000 complete works to: ../data/openalex/T10695_works.json
+Loading works from disk: ../data/openalex/T10695_works.json
+Initializing baseline Embedding Model ('allenai/specter2_base')...
+Loading weights: 100%|█| 199/199 [00:00<00:0
+Loaded 8000 papers. Computing embeddings (allenai/specter2_base)...
+Batches: 100%|█| 250/250 [00:41<00:00,  5.96
+Embeddings computed. Shape: (8000, 768)
+/data/horse/ws/yuzh952h-cb/myenv/lib/python3.13/site-packages/umap/umap_.py:1952: UserWarning: n_jobs value 1 overridden to 1 by setting random_state. Use no seed for parallelism.
+  warn(
+HDBSCAN clusters: 41 (noise docs: 3409)
+Saved cluster scores to: ../out/topics/T10695/cluster_scores.tsv
+Returning top-10 candidate clusters by score (top_k_candidates=10).
+Saved FULL cluster papers JSON to: ../out/topics/T10695/cluster_papers.json
+🔄 Pipeline round 1 | Budget: top 50 works in Cluster 32...
+  🔍 Budget requested: top50 | New papers to audit via LLM: 50
+[LLM Final Gate] Auditing 50 papers from selected Cluster 32...
+Processing papers: 100%|█| 50/50 [09:40<00:0
+  💾 Updated audit cache (50 total records) saved to: ../out/topics/T10695/audit_results.json
+   📊 Final Gate Audit Result: 38 papers PASSED semantic verification.
+   🟢 [SUCCESS] Gate passed! Topic T10695 secured 38 gold works.
+🏷️ [TopicGPT] Generating topic name & description using 20 clean papers...
+Saved verified TopicGPT labels to: ../out/topics/T10695/topicgpt_labels.json
+   💾 Successfully stored 20 clean papers to: ../out/topics/T10695/final_verified_papers.json
+  Completed topic T10695 -> Cluster 32: Strongyloidiasis Hyperinfection and Dissemination
+
+[17/26] Processing topic T10083 ...
+Calling OpenAlex API for topic T10083 (target n=8000, base_seed=42)
+Warning : `load_model` does not return WordVectorModel or SupervisedModel any more, but a `FastText` object which is very similar.
+Initializing baseline Embedding Model ('allenai/specter2_base')...
+Loading weights: 100%|█| 199/199 [00:00<00:0
+  Round 1/10: request sample=8000, seed=42
+    added_complete=6083, total_complete=6083
+  Round 2/10: request sample=2000, seed=43
+    added_complete=1332, total_complete=7415
+  Round 3/10: request sample=2000, seed=44
+    added_complete=585, total_complete=8000
+Saved 8000 complete works to: ../data/openalex/T10083_works.json
+Loading works from disk: ../data/openalex/T10083_works.json
+Initializing baseline Embedding Model ('allenai/specter2_base')...
+Loading weights: 100%|█| 199/199 [00:00<00:0
+Loaded 8000 papers. Computing embeddings (allenai/specter2_base)...
+Batches: 100%|█| 250/250 [00:31<00:00,  8.04
+Embeddings computed. Shape: (8000, 768)
+/data/horse/ws/yuzh952h-cb/myenv/lib/python3.13/site-packages/umap/umap_.py:1952: UserWarning: n_jobs value 1 overridden to 1 by setting random_state. Use no seed for parallelism.
+  warn(
+HDBSCAN clusters: 32 (noise docs: 4143)
+Saved cluster scores to: ../out/topics/T10083/cluster_scores.tsv
+Returning top-10 candidate clusters by score (top_k_candidates=10).
+Saved FULL cluster papers JSON to: ../out/topics/T10083/cluster_papers.json
+🔄 Pipeline round 1 | Budget: top 50 works in Cluster 4...
+  🔍 Budget requested: top50 | New papers to audit via LLM: 50
+[LLM Final Gate] Auditing 50 papers from selected Cluster 4...
+Processing papers:  34%|▎| 17/50 [07:06<13:1

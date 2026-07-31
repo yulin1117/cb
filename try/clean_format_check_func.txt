@@ -1,0 +1,45 @@
+def check_broken_word(text: str, max_allowed_broken: int = 2) -> bool:
+    
+    """
+    判斷字串是否含有 HTML 標籤或未處置的 HTML 實體
+    """
+    # 判斷是否含有真正的 HTML 標籤 (如 <p>, <i>, <sub> 等)
+    has_tag = bool(BeautifulSoup(text, "html.parser").find())
+    
+    # 判斷是否含有 HTML 實體編碼 (例如 &amp;, &lt;, &gt;)
+    has_entity = "&" in text and ";" in text
+    if has_tag or has_entity:
+        return False
+    """
+    利用字典判斷字串中是否含有破損連字 (如 com-press -> compress)
+    """
+    if not isinstance(text, str) or not text:
+        return False
+    
+    normalized_text = re.sub(r'\u00AD\s*', '-', text)
+    # 抓出所有由連字號連接的單字 (如 com-press)
+    matches = re.findall(r'\b[a-zA-Z]{2,}-\s*[a-zA-Z]{2,}\b', normalized_text)
+    
+    broken_count = 0
+    for match in matches:
+        # 如果原始字串（例如 "ques- tionnaire"）不在字典裡
+        if not dictionary.check(match):
+            # 移除連字號與所有空格 (ques- tionnaire -> questionnaire)
+            joined_word = re.sub(r'-\s*', '', match)
+            
+            # 若去除連字號與空格後，變成了合法的英文單字，代表這是排版破損字！
+            if dictionary.check(joined_word):
+                broken_count += 1
+    if broken_count >= max_allowed_broken:
+        return False
+    
+    """
+    偵測文字中是否含有 Unicode Private Use Area (PUA) 缺字/亂碼字元
+    範圍：\uE000-\uF8FF (包含 , ,  等豆腐塊/亂碼) 以及 '\ufffd' ()
+    """
+    # 匹配 PUA 區段字元與 Replacement Character ()
+    pua_pattern = r'[\uE000-\uF8FF\uFFFD]'
+    
+    matches = re.findall(pua_pattern, text)
+    if len(matches) > 0:  # 一旦出現即代表字體對映損壞
+        return False

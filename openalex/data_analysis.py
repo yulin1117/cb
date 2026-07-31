@@ -13,6 +13,14 @@ import requests
 
 from openalex.openalex import reconstruct_abstract
 from openalex.topic_clustering import select_openalex_topics
+from openalex.openalex import (
+    reconstruct_abstract,
+    lang_detect,
+    duplicate_detect,
+    content_detect,
+    _get_fasttext_model,
+    _get_specter_model
+)
 
 
 def _strip_openalex_id(url_or_id: str) -> str:
@@ -195,8 +203,8 @@ def _work_to_row(
 
 def dataset_to_csv(
     n: int = 10,
-    topics_base_dir: str | Path = "../out/topics",
-    output_csv: str | Path = "../out/openalex/papers.csv",
+    topics_base_dir: str | Path = "out/topics",
+    output_csv: str | Path = "out/openalex/papers.csv",
     mailto: str = "tobias.schreieder@tu-dresden.de",
     sleep_seconds: float = 0.1,
     deduplicate_papers: bool = True,
@@ -210,7 +218,7 @@ def dataset_to_csv(
     2. For each topic:
        - load out/topics/{topic_id}/topicgpt_labels.json
        - choose the cluster with the highest score
-       - load out/topics/{topic_id}/representatives_top20.json
+       - load out/topics/{topic_id}/representatives_top50.json
        - take the 20 papers from that selected cluster
        - fetch each paper from the OpenAlex API
        - reconstruct the abstract from abstract_inverted_index
@@ -246,35 +254,70 @@ def dataset_to_csv(
             topic_id = _strip_openalex_id(topic)
             topic_dir = topics_base_dir / topic_id
 
-            final_path = topic_dir / "final_verified_papers.json"
+            reps_path = topic_dir / "representatives_top50.json"
+            labels_path = topic_dir / "topicgpt_labels.json"
 
-            if not final_path.exists():
-                print(f"Skipping {topic_id}: missing {final_path}")
+            if not reps_path.exists():
+                print(f"Skipping {topic_id}: missing {reps_path}")
                 continue
+
+            if not labels_path.exists():
+                print(f"Skipping {topic_id}: missing {labels_path}")
+                continue
+
             try:
-                final = _load_json(final_path)
+                reps = _load_json(reps_path)
+                labels = _load_json(labels_path)
             except Exception as e:
-                print(f"Skipping {topic_id}: failed to load {final_path} ({e})")
+                print(f"Skipping {topic_id}: failed to load JSON files ({e})")
                 continue
 
-            topic_name = final.get("topic_name", "")
-
-            papers = final.get("papers", [])
-
-            if not papers:
-                print(f"Skipping {topic_id}: no verified papers")
+            clusters = labels.get("clusters", {})
+            if not isinstance(clusters, dict) or not clusters:
+                print(f"Skipping {topic_id}: no clusters in {labels_path}")
                 continue
 
-            print(f"Processing {topic_id}: {len(papers)} verified papers")
+            try:
+                best_cluster_id, best_cluster = max(
+                    clusters.items(),
+                    key=lambda x: float((x[1] or {}).get("score", float("-inf"))),
+                )
+            except Exception as e:
+                print(f"Skipping {topic_id}: failed to determine best cluster ({e})")
+                continue
+
+            if not isinstance(best_cluster, dict):
+                print(f"Skipping {topic_id}: invalid best cluster")
+                continue
+
+            topic_name = best_cluster.get("topic_name", "") or ""
+            if not topic_name:
+                print(f"Skipping {topic_id}: selected cluster has no topic_name")
+                continue
+
+            reps_clusters = reps.get("clusters", {})
+            if not isinstance(reps_clusters, dict):
+                print(f"Skipping {topic_id}: invalid clusters structure in {reps_path}")
+                continue
+
+            selected_cluster = reps_clusters.get(str(best_cluster_id))
+            if not isinstance(selected_cluster, dict):
+                print(f"Skipping {topic_id}: cluster {best_cluster_id} not found in {reps_path}")
+                continue
+
+            papers = selected_cluster.get("papers", [])
+            if not isinstance(papers, list):
+                print(f"Skipping {topic_id}: papers missing for cluster {best_cluster_id}")
+                continue
 
             for paper in papers:
                 if not isinstance(paper, dict):
                     continue
-                paper_id = _strip_openalex_id(
-                    paper.get("id", "")
-                )
+
+                paper_id = _strip_openalex_id(paper.get("id", ""))
                 if not paper_id:
                     continue
+
                 if deduplicate_papers and paper_id in seen_papers:
                     continue
                 seen_papers.add(paper_id)
@@ -285,12 +328,14 @@ def dataset_to_csv(
                 )
                 if not work:
                     continue
+
                 row = _work_to_row(
                     work=work,
                     field=field,
                     topic_name=topic_name,
                 )
                 rows.append(row)
+
                 if sleep_seconds > 0:
                     time.sleep(sleep_seconds)
 
@@ -479,10 +524,70 @@ def eda(
             plt.savefig(country_plot, dpi=200)
             plt.close()
 
+    # -------- QUALITY CHECKS (language, duplicate, content match) --------
+    quality_plot = plots_dir / "quality_checks.png"
+    quality_summary_csv = null_summary_csv.parent / "papers_quality_check.csv"
+
+    if "title" in df_clean.columns and "abstract" in df_clean.columns:
+        ft_model = _get_fasttext_model()
+        st_model = _get_specter_model()
+
+        titles = df_clean["title"].fillna("").astype(str)
+        abstracts = df_clean["abstract"].fillna("").astype(str)
+
+        lang_pass: list[bool] = []
+        is_duplicate: list[bool] = []
+        content_pass: list[bool] = []
+        seen_hashes: set[str] = set()
+
+        for title, abstract in zip(titles, abstracts):
+            combined = f"{title}. {abstract}"
+            lang_pass.append(lang_detect(combined, ft_model))
+            is_duplicate.append(duplicate_detect(abstract, seen_hashes))
+            content_pass.append(content_detect(title, abstract, st_model))
+
+        quality_df = pd.DataFrame({
+            "id": df_clean["id"] if "id" in df_clean.columns else range(len(df_clean)),
+            "lang_pass": lang_pass,
+            "is_duplicate": is_duplicate,
+            "content_pass": content_pass,
+        })
+        quality_df["all_pass"] = (
+            quality_df["lang_pass"]
+            & ~quality_df["is_duplicate"]
+            & quality_df["content_pass"]
+        )
+        quality_df.to_csv(quality_summary_csv, index=False)
+
+        total = len(quality_df)
+        lang_pass_pct = quality_df["lang_pass"].mean() * 100 if total else 0.0
+        dup_pct = quality_df["is_duplicate"].mean() * 100 if total else 0.0
+        content_pass_pct = quality_df["content_pass"].mean() * 100 if total else 0.0
+        all_pass_pct = quality_df["all_pass"].mean() * 100 if total else 0.0
+
+        plt.figure(figsize=(10, 6))
+        labels = ["Language\n(English)", "Not Duplicate", "Content Match\n(title/abstract)", "All Checks\nPassed"]
+        values = [lang_pass_pct, 100 - dup_pct, content_pass_pct, all_pass_pct]
+        bars = plt.bar(labels, values)
+        for bar, val in zip(bars, values):
+            plt.text(bar.get_x() + bar.get_width() / 2, val + 1, f"{val:.1f}%", ha="center")
+        plt.ylabel("% of Papers Passing")
+        plt.ylim(0, 110)
+        plt.title(f"Rule-Based Quality Check Pass Rates (n={total})")
+        plt.tight_layout()
+        plt.savefig(quality_plot, dpi=200)
+        plt.close()
+
+        print(f"Quality check: {total} papers | English: {lang_pass_pct:.1f}% | "
+              f"Duplicates: {dup_pct:.1f}% | Content match: {content_pass_pct:.1f}% | "
+              f"All checks passed: {all_pass_pct:.1f}%")
+
     return {
         "null_summary_csv": null_summary_csv,
         "year_plot": year_plot,
         "type_plot": type_plot,
         "citation_plot": citation_plot,
         "country_plot": country_plot,
+        "quality_plot": quality_plot,
+        "quality_summary_csv": quality_summary_csv,
     }

@@ -10,6 +10,33 @@ from collections import Counter
 from nltk.tokenize import sent_tokenize
 import fasttext
 from sentence_transformers import SentenceTransformer, util
+from bs4 import BeautifulSoup
+import re
+import enchant
+# initialize eng dictionary (US English)
+dictionary = enchant.Dict("en_US")
+# 定義期刊導航與付費牆頁面的特徵 Pattern
+GARBAGE_PATTERNS = [
+    # Cookie & 導航標籤
+    r'cookies\s+to\s+enhance\s+your\s+experience',
+    r'RETURN\s+TO\s+ISSUE',
+    r'PREV\s*Article\s*NEXT',
+    r'PREV\s*Nano\s*NEXT',
+    r'ADVERTISEMENT\s+RETURN',
+    
+    # 導航與分享區塊
+    r'Share\s+on\s*Facebook\s*Twitter',
+    r'LEARN\s+ABOUT\s+THESE\s+METRICS',
+    r'Article\s+Views\s+are\s+the\s+COUNTER-compliant',
+    r'Altmetric\s+Attention\s+Score',
+    r'Request\s+reuse\s+permissions',
+    r'Get\s+e-Alerts',
+    r'Add\s+Full\s+Text\s+with\s+Reference',
+]
+
+# 預編譯以增進執行速度
+GARBAGE_REGEX = re.compile('|'.join(GARBAGE_PATTERNS), re.IGNORECASE)
+
 def get_openalex_topics(cache_file="../data/openalex/topics.json"):
     """
     Fetch all topics from OpenAlex API or read from cache if available.
@@ -71,10 +98,34 @@ def _get_specter_model():
     return _specter_model 
 
 
-def lang_detect(text, model, threshold=0.2):
+def title_lang_detect(text: str, model,threshold: float = 0.5) -> bool:
+    """
+    Sentence-by-sentence validation using FastText.
+    Returns True if non-English sentence ratio < threshold, else False.
+    """
+    if not isinstance(text, str) or not text.strip():
+        return False
+    if len(text) < 5:
+        return False
+    (labels, probs) = model.predict(text.strip().replace("\n", " "), k=1)
+    
+    lang = labels[0].replace("__label__", "")
+    confidence = probs[0]  # 這裡拿到的才是真正的 float 機率值 (e.g. 0.85)
+
+    if lang != "en":
+        return False
+        
+    if confidence < threshold:
+        return False
+
+    return True
+
+def abstract_lang_detect(text, model, threshold=0.2):
     """
     Sentence-by-sentence validation using FastText. Filters out documents containing more non-eng sentences than threshold.
     """
+    if not text or not text.strip():
+        return False
     sentences = sent_tokenize(text)
     valid_sentences_count=0
     non_eng_sentences  = 0  
@@ -115,6 +166,50 @@ def content_detect(title: str, abstract: str, st_model) -> bool:
                 return False
         except Exception:
             return False  # Fail-safe reject on vectorization error
+    return True
+
+def clean_format_check(text: str, max_allowed_broken: int = 2) -> bool:
+    if not isinstance(text, str) or not text:
+            return False
+    """
+    0. paywall / navigation / cookie / advertisement / share / metrics / reuse permissions / e-alerts / full text with reference
+    """
+    has_garbage=bool(GARBAGE_REGEX.search(text))
+    if has_garbage:
+        return False
+    """
+    1. check if contains html tag
+    """
+    has_tag = bool(BeautifulSoup(text, "html.parser").find())
+    has_entity = "&" in text and ";" in text
+    if has_tag or has_entity:
+        return False
+    """
+    2. broken words(ex: com-press -> compress)
+    """
+    normalized_text = re.sub(r'\u00AD\s*', '-', text)
+    matches = re.findall(r'\b[a-zA-Z]{2,}-\s*[a-zA-Z]{2,}\b', normalized_text)
+    
+    broken_count = 0
+    for match in matches:
+        # if the original string (e.g., "ques- tionnaire") is not in the dictionary
+        if not dictionary.check(match):
+            # ex: ques- tionnaire -> questionnaire
+            joined_word = re.sub(r'-\s*', '', match)
+            
+            # if it becomes a valid word after removing hyphen and spaces, it's a broken word!
+            if dictionary.check(joined_word):
+                broken_count += 1
+    if broken_count >= max_allowed_broken:
+        return False
+    """
+    3. check if Unicode Private Use Area (PUA) characters or Replacement Character () are present in the text
+    range：\uE000-\uF8FF (including  ) and '\ufffd' ()
+    """
+    pua_pattern = r'[\uE000-\uF8FF\uFFFD]'
+    matches = re.findall(pua_pattern, text)
+    if len(matches) > 0: 
+        return False
     return True
 
 def reconstruct_abstract(abstract_inverted_index):
@@ -314,15 +409,21 @@ def get_works_for_topic(topic_url: str, n: int = 5000, random_state: int = 42,
                 if duplicate_detect(abstract, seen_abstract_hashes):
                     continue
 
-                combined_text = f"{title}. {abstract}"
-                # 3. English language check (FastText sentence-by-sentence)
-                if not lang_detect(combined_text, ft_model):
+                # 3. lang detect
+                # 3a. title detection: maintain strict threshold 0.5 (ensure title is primarily English)
+                if not title_lang_detect(title, ft_model, threshold=0.5):
+                    continue
+                # 3b. abstract detection: maintain relaxed threshold 0.2 (allow some non-English content in abstract)
+                if not abstract_lang_detect(abstract, ft_model, threshold=0.2):
                     continue
 
                 # 4. Content match check (SentenceTransformer check)
                 if not content_detect(title, abstract, st_model):
                     continue
-                
+                # 5. clean_format_check (ensure no HTML tags, broken words, or missing characters)
+                text = f"{title}. {abstract}"
+                if not clean_format_check(text, max_allowed_broken=2):
+                    continue
                 w["reconstructed_abstract"] = abstract
                 complete_works.append(w)
                 added_this_round += 1
@@ -367,7 +468,6 @@ def get_works_for_topic_reservoir_sampling(topic_url, n=10000):
     """
     # Extract topic ID ("https://openalex.org/T1234" → "T1234")
     topic_id = topic_url.rstrip("/").split("/")[-1]
-
     # Prepare directory & file paths
     save_dir = os.path.join("../data", "openalex")
     os.makedirs(save_dir, exist_ok=True)

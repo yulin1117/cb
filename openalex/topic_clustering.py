@@ -15,8 +15,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics.pairwise import cosine_distances, cosine_similarity
 from sentence_transformers import SentenceTransformer
 import hdbscan
-from typing import Any
-
+from typing import Any, Dict, List, Optional
 from llm.topic_gpt import TopicGPT
 from openalex.openalex import load_topic_title_abstract, get_openalex_topics, get_works_for_topic
 from llm.llm_final_check import run_llm_final_check
@@ -329,7 +328,7 @@ def cluster_topic(
         size_cap: int = 2000,
         distinct_top_k: int = 1,
         top_k_candidates: int = 10,
-) -> tuple[dict[int, list[dict[str, str]]], dict[int, int], dict[int, dict[str, float]]]:
+) -> tuple[dict[int, list[dict[str, str]]], dict[int, int], dict[int, dict[str, float]], int]:
     """
     Cluster scientific abstracts for an OpenAlex topic and return representative abstracts.
 
@@ -361,8 +360,22 @@ def cluster_topic(
         - cluster_sizes: dict[int, int] mapping cluster_id to the number of papers in each returned cluster.
         - cluster_metrics: dict[int, dict[str, float]] mapping cluster_id to coherence/distinctiveness/score.
     """
-    
+    topic_id: str = topic_url.rstrip("/").split("/")[-1]
     out_root: str = os.path.join("../out", "topics")
+    target_file = os.path.join(out_root, f"{topic_id}/cluster_papers.json")
+    
+    if os.path.exists(target_file):
+        print(f"[CACHE-CLUSTER] Topic {topic_id} already has cluster_papers.json. Parsing...")
+        try:
+            with open(target_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if "selected_cluster" in data and data["selected_cluster"] is not None:
+                top_cluster_id = int(data["selected_cluster"])
+                print(f"[CACHE-CLUSTER] Found saved selected_cluster ID: {top_cluster_id}")
+                return {}, {}, {}, top_cluster_id
+        except Exception as cache_err:
+            print(f"⚠️ [CACHE-CLUSTER] Failed to read cache ({cache_err}). Falling back to re-computing...")
+            pass
 
     # -----------------------------
     # Constants (kept internal for simplicity)
@@ -501,7 +514,7 @@ def cluster_topic(
     # -----------------------------
     # Load papers (id + text)
     # -----------------------------
-    topic_id: str = topic_url.rstrip("/").split("/")[-1]
+    
     save_dir: str = os.path.join(out_root, topic_id)
     os.makedirs(save_dir, exist_ok=True)
 
@@ -533,8 +546,10 @@ def cluster_topic(
     # -----------------------------
     # if specter_model is None:
     #     global specter_model=_get_specter_model() //I don't know why it fail but comment this , works!
+    specter_model=_get_specter_model()#initialize a new specter model to avoid interference with previous content check
     print(f"Loaded {len(texts)} papers. Computing embeddings ({embedding_model_name})...")
-
+    
+    # 2. 執行推理 (建議加上 torch.no_grad() 避免紀錄梯度佔用記憶體)
     emb: np.ndarray = specter_model.encode(
         texts,
         batch_size=batch_size,
@@ -594,8 +609,9 @@ def cluster_topic(
 
     if not score:
         print("No non-noise clusters to score.")
-        return {}, {}, {}
-
+        return {}, {}, {},-1
+    # 🚀 Identify the top cluster with the highest score
+    selected_cluster: int = max(score.keys(), key=lambda c: score[c])
     # Persist scores for auditing/debugging
     scores_path: str = os.path.join(save_dir, "cluster_scores.tsv")
     with open(scores_path, "w", encoding="utf-8") as f:
@@ -630,7 +646,8 @@ def cluster_topic(
         idxs: np.ndarray = np.where(labels == c)[0]
         cluster_sizes[int(c)] = int(len(idxs))
 
-        k_rep: int = min(representative_abstracts, len(idxs))
+        # 🚀 Key change: Select ALL papers in the cluster (k_rep = total cluster members)
+        k_rep: int = len(idxs)
         if k_rep <= 0:
             continue
 
@@ -672,18 +689,20 @@ def cluster_topic(
     # -----------------------------
     # Save representatives (JSON only) for TopicGPT step
     # -----------------------------
-    reps_json_path: str = os.path.join(save_dir, f"representatives_top{representative_abstracts}.json")
-    with open(reps_json_path, "w", encoding="utf-8") as f:
+    # 1. Primary Output: Fixed full dataset JSON
+    full_json_path: str = os.path.join(save_dir, "cluster_papers.json")
+    with open(full_json_path, "w", encoding="utf-8") as f:
         json.dump(
             {
                 "topic_id": topic_id,
                 "topic_url": topic_url.rstrip("/"),
-                "representative_abstracts": representative_abstracts,
+                "selected_cluster": selected_cluster,
+                "total_clusters": len(clusters_to_emit),
                 "clusters": {
                     str(c): {
                         "n": cluster_sizes.get(c),
                         "metrics": cluster_metrics.get(c, {}),
-                        "papers": representatives.get(c, []),
+                        "papers": representatives.get(c, []),  # All papers included
                     }
                     for c in clusters_to_emit
                     if c in representatives
@@ -693,9 +712,8 @@ def cluster_topic(
             ensure_ascii=False,
             indent=2,
         )
-    print("Saved representatives JSON to:", reps_json_path)
-
-    return representatives, cluster_sizes, cluster_metrics
+    print("Saved FULL cluster papers JSON to:", full_json_path)
+    return representatives, cluster_sizes, cluster_metrics, selected_cluster
 
 
 def run_topic_gpt(topic_url: str, model: str = "moonshotai/Kimi-K2.7-Code", temperature: float = 0.2,
@@ -907,7 +925,150 @@ def run_topic_gpt(topic_url: str, model: str = "moonshotai/Kimi-K2.7-Code", temp
     print("Saved TopicGPT labels to:", out_path)
     return results
 
+def run_topic_gpt_on_verified_papers(
+        topic_url: str,
+        verified_papers: List[Dict[str, Any]],
+        model: str = "moonshotai/Kimi-K2.7-Code",
+        temperature: float = 0.2,
+        out_root: str = os.path.join("../out", "topics")
+) -> Dict[str, Any]:
+    """
+    Run TopicGPT labeling specifically on the clean, verified papers obtained after 
+    passing the LLM Gate audit.
 
+    This function replaces multi-cluster TopicGPT evaluation by focusing on the 
+    single set of high-quality verified papers, avoiding redundant API calls and 
+    eliminating noise from non-compliant papers.
+
+    :param topic_url: OpenAlex topic URL identifying the umbrella topic.
+    :param verified_papers: List of paper dicts passed by the LLM Gate audit (>= 20 papers).
+    :param model: LLM model identifier for TopicGPT labeling.
+    :param temperature: LLM sampling temperature.
+    :param out_root: Output root directory path.
+    :return: Dict containing TopicGPT labeling results (e.g., topic_name, description, n).
+    """
+    topic_url = topic_url.rstrip("/")
+    topic_id: str = topic_url.split("/")[-1]
+    save_dir: str = os.path.join(out_root, topic_id)
+    os.makedirs(save_dir, exist_ok=True)
+
+    #load existing cache if available
+    target_file = os.path.join(save_dir, "topicgpt_labels.json")
+    if os.path.exists(target_file):
+        print(f"[CACHE-GPT] TopicGPT labels already exist. Loading...")
+        try:
+            with open(target_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data["cluster_result"]
+            
+        except Exception as cache_err:
+            print(f"⚠️ [CACHE-GPT] Failed to read cache ({cache_err}). Falling back to re-computing...")
+            pass
+
+    if not verified_papers:
+        raise ValueError(f"No verified papers provided for TopicGPT labeling on topic {topic_id}.")
+
+    topics_path: str = os.path.join("../data", "openalex", "topics.json")
+
+    if not os.path.exists(topics_path):
+        # Trigger openalex topic metadata download if missing
+        get_openalex_topics()
+        if not os.path.exists(topics_path):
+            raise FileNotFoundError(
+                f"{topics_path} not found even after calling get_openalex_topics()."
+            )
+
+    with open(topics_path, "r", encoding="utf-8") as f:
+        topics_data = json.load(f)
+
+    topic_obj: Optional[Dict[str, Any]] = None
+
+    if isinstance(topics_data, list):
+        for t in topics_data:
+            if not isinstance(t, dict):
+                continue
+            tid = str(t.get("id", "")).rstrip("/")
+            if tid == topic_url or tid.endswith(f"/{topic_id}") or tid == topic_id:
+                topic_obj = t
+                break
+
+    elif isinstance(topics_data, dict):
+        topic_obj = topics_data.get(topic_id) or topics_data.get(topic_url)
+
+        if topic_obj is None and "results" in topics_data and isinstance(topics_data["results"], list):
+            for t in topics_data["results"]:
+                if not isinstance(t, dict):
+                    continue
+                tid = str(t.get("id", "")).rstrip("/")
+                if tid == topic_url or tid.endswith(f"/{topic_id}") or tid == topic_id:
+                    topic_obj = t
+                    break
+
+    if topic_obj is None:
+        raise KeyError(
+            f"Topic {topic_url} ({topic_id}) not found in {topics_path}. "
+            f"Please verify topics.json structure."
+        )
+
+    umbrella_display_name: str = str(topic_obj.get("display_name", "")).strip()
+    umbrella_description: str = str(topic_obj.get("description", "")).strip()
+
+    if not umbrella_display_name or not umbrella_description:
+        raise ValueError(
+            f"Umbrella metadata missing for {topic_url}.\n"
+            f"display_name='{umbrella_display_name}'\n"
+            f"description length={len(umbrella_description)}"
+        )
+
+    abstracts_for_llm: List[str] = []
+    for p in verified_papers:
+        if not isinstance(p, dict):
+            continue
+        txt = str(p.get("text", "")).strip()
+        if not txt:
+            title = str(p.get("title", "")).strip()
+            abstract = str(p.get("abstract", "")).strip()
+            if title or abstract:
+                txt = f"{title}. {abstract}".strip()
+        if txt:
+            abstracts_for_llm.append(txt)
+
+    if not abstracts_for_llm:
+        raise ValueError(f"No valid textual content found in verified papers for topic {topic_id}.")
+
+    topic_gpt = TopicGPT(model=model, temperature=temperature)
+
+    # Label the single target verified set as cluster 0
+    label_result: Dict[str, Any] = topic_gpt.label_cluster(
+        cluster_id=0,
+        abstracts=abstracts_for_llm,
+        umbrella_display_name=umbrella_display_name,
+        umbrella_description=umbrella_description,
+    )
+
+    # Record total clean verified papers count
+    label_result["n"] = len(verified_papers)
+
+    out_path = os.path.join(save_dir, "topicgpt_labels.json")
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "topic_id": topic_id,
+                "topic_url": topic_url,
+                "umbrella_display_name": umbrella_display_name,
+                "umbrella_description": umbrella_description,
+                "model": model,
+                "temperature": temperature,
+                "total_verified_papers": len(verified_papers),
+                "cluster_result": label_result,
+            },
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
+
+    print(f"Saved verified TopicGPT labels to: {out_path}")
+    return label_result
 
 def select_topic_from_topicgpt(topic_url: str) -> tuple[int, dict]:
     """
@@ -1169,59 +1330,74 @@ def create_openalex_dataset(n_per_field: int = 10, works_n: int = 10000, random_
             print(f"  [ERROR] get_works_for_topic failed for {topic_id}: {e}")
             continue
 
-        selected_cluster = None
         selected_payload = {}
         final_verified_papers = []
         verified_papers=[]
         current_reps_budget = 50  
         loop_round = 1
-        max_resample_attempts = 4
+        max_resample_attempts = 10
 
+        try:
+            _, _, _, selected_cluster=cluster_topic(topic_url=topic_url, representative_abstracts=current_reps_budget)
+        except Exception as e:
+            print(f"  [ERROR] Initial clustering failed for {topic_id}: {e}")
+            continue
+        
+        # -----------------------------
+        # 4. Incremental LLM Gate Filter Loop
+        # -----------------------------
         while loop_round <= max_resample_attempts:
-            print(f"🔄 Pipeline round {loop_round} , select {current_reps_budget} works in a cluster...")
+            print(f"🔄 Pipeline round {loop_round} | Budget: top {current_reps_budget} works in Cluster {selected_cluster}...")
             
             try:
-                cluster_topic(topic_url=topic_url, representative_abstracts=current_reps_budget)
-                _labels = run_topic_gpt(topic_url=topic_url, representative_abstracts=current_reps_budget)
-                selected_cluster, selected_payload = select_topic_from_topicgpt(topic_url=topic_url)
+                gold_passed_count, verified_papers = run_llm_final_check(
+                    topic_url=topic_url,
+                    selected_cluster=selected_cluster,
+                    representative_abstracts=current_reps_budget
+                )
+            except Exception as check_err:
+                print(f"  [ERROR] LLM Final Gate crashed: {check_err}")
+                gold_passed_count = 0
+            
+            print(f"   📊 Final Gate Audit Result: {gold_passed_count} papers PASSED semantic verification.")
+            
+            if gold_passed_count >= 20:
+                print(f"   🟢 [SUCCESS] Gate passed! Topic {topic_id} secured {gold_passed_count} gold works.")
+                final_verified_papers = verified_papers[:20]  # 取前 20 篇合格論文 (或保留全部)
+                break 
+            else:
+                print(f"   ⚠️ [GATE BLOCKED] Only {gold_passed_count} clean works found < 20.")
 
-                # 🚀 獨立保護把關機制：crashed 時設為 0，但不中斷這一輪的點數檢查
-                try:
-                    gold_passed_count, verified_papers = run_llm_final_check(
-                        topic_url=topic_url,
-                        selected_cluster=selected_cluster,
-                        representative_abstracts=current_reps_budget
-                    )
-                except Exception as check_err:
-                    print(f"  [ERROR] LLM Final Gate crashed: {check_err}")
-                    gold_passed_count = 0
-                
-                print(f"   📊 Final Gate Audit Result: {gold_passed_count} papers PASSED semantic verification.")
-                
-                if gold_passed_count >= 20:
-                    print(f"   🟢 [SUCCESS] Gate passed! Topic {topic_id} secured {gold_passed_count} gold works.")
-                    final_verified_papers = verified_papers
-                    break 
-                else:
-                    print(f"   ⚠️ [GATE BLOCKED] Only {gold_passed_count} clean works found < 20.")
-                    
-            except Exception as e:
-                print(f"  [ERROR] Pipeline step failed in round {loop_round} for {topic_id}: {e}")
-
-            # ─── 統一的升級策略（不論是步驟崩潰，還是閥值未達標，通通走到這裡） ───
-            current_reps_budget += 20  # 50 -> 70 -> 90 -> 110
+            current_reps_budget += 20  
             loop_round += 1
             if loop_round <= max_resample_attempts:
-                print(f"   🚀 [SCALING POOL] Expanding search budget to top{current_reps_budget} in the best cluster for the next round...")
+                print(f"🚀 [SCALING POOL] Expanding search budget to top{current_reps_budget} for the next round...")
         
-        # --
+        # -----------------------------
+        # 5. Single-pass TopicGPT Labeling (Only after verification)
+        # -----------------------------
         if final_verified_papers:
+            print(f"🏷️ [TopicGPT] Generating topic name & description using {len(final_verified_papers)} clean papers...")
+            try:
+                selected_payload = run_topic_gpt_on_verified_papers(
+                    topic_url=topic_url,
+                    verified_papers=final_verified_papers
+                )
+            except Exception as gpt_err:
+                print(f"  [WARNING] TopicGPT labeling failed for {topic_id}: {gpt_err}")
+                selected_payload = {
+                    "topic_name": f"Topic_{topic_id}_Cluster_{selected_cluster}",
+                    "description": "Topic description generation failed."
+                }
+
             final_save_path = os.path.join("../out", "topics", topic_id, "final_verified_papers.json")
             try:
                 with open(final_save_path, "w", encoding="utf-8") as f:
                     json.dump({
                         "topic_id": topic_id,
+                        "selected_cluster": selected_cluster,
                         "topic_name": selected_payload.get("topic_name", ""),
+                        "description": selected_payload.get("description", ""),
                         "total_verified": len(final_verified_papers),
                         "budget_used": current_reps_budget,
                         "papers": final_verified_papers
@@ -1229,8 +1405,12 @@ def create_openalex_dataset(n_per_field: int = 10, works_n: int = 10000, random_
                 print(f"   💾 Successfully stored {len(final_verified_papers)} clean papers to: {final_save_path}")
             except Exception as save_err:
                 print(f"   [ERROR] Failed to save gold verified papers for {topic_id}: {save_err}")
+        else:
+            print(f"❌ [FAILED] Topic {topic_id} could not reach 20 verified papers after {max_resample_attempts} rounds.")
 
-        # ─── 脫離迴圈，安全寫入結果 ───
+        # -----------------------------
+        # 6. Accumulate CSV Summary Row
+        # -----------------------------
         ours_topic = str(selected_payload.get("topic_name", "")).strip()
         ours_desc = str(selected_payload.get("description", "")).strip()
 
@@ -1244,8 +1424,7 @@ def create_openalex_dataset(n_per_field: int = 10, works_n: int = 10000, random_
             "Field": field_str,
         })
 
-        print(f"  Selected cluster {selected_cluster}: {ours_topic}")
-
+        print(f"  Completed topic {topic_id} -> Cluster {selected_cluster}: {ours_topic}")
     # -----------------------------
     # Write CSV
     # -----------------------------
@@ -1260,6 +1439,3 @@ def create_openalex_dataset(n_per_field: int = 10, works_n: int = 10000, random_
             writer.writerow(r)
 
     print(f"\nSaved dataset CSV with {len(rows)} rows to: {out_csv}")
-
-
-
