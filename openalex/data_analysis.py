@@ -3,23 +3,22 @@ from __future__ import annotations
 import csv
 import json
 import time
-from typing import Any
 from pathlib import Path
+from typing import Any
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
-
 import requests
 
-from openalex.openalex import reconstruct_abstract
-from openalex.topic_clustering import select_openalex_topics
 from openalex.openalex import (
-    reconstruct_abstract,
-    lang_detect,
-    duplicate_detect,
-    content_detect,
     _get_fasttext_model,
-    _get_specter_model
+    _get_specter_model,
+    abstract_lang_detect,
+    content_detect,
+    duplicate_detect,
+    reconstruct_abstract,
+    title_lang_detect,
 )
 
 
@@ -148,12 +147,16 @@ def _fetch_work_from_openalex(
                     print(f"Warning: unexpected response for {work_id}")
                     return None
 
-                inv = work.get("abstract_inverted_index") or work.get("abstract_inversted_index")
+                inv = work.get("abstract_inverted_index") or work.get(
+                    "abstract_inversted_index"
+                )
                 if inv:
                     try:
                         work["abstract"] = reconstruct_abstract(inv)
                     except Exception as e:
-                        print(f"Warning: failed to reconstruct abstract for {work_id}: {e}")
+                        print(
+                            f"Warning: failed to reconstruct abstract for {work_id}: {e}"
+                        )
                         work["abstract"] = ""
                 else:
                     work["abstract"] = ""
@@ -161,7 +164,7 @@ def _fetch_work_from_openalex(
                 return work
 
             if resp.status_code in (429, 500, 502, 503, 504):
-                sleep_s = min(60, 2 ** attempt)
+                sleep_s = min(60, 2**attempt)
                 time.sleep(sleep_s)
                 continue
 
@@ -172,7 +175,7 @@ def _fetch_work_from_openalex(
             if attempt == max_retries - 1:
                 print(f"Warning: request failed for {work_id}: {e}")
                 return None
-            sleep_s = min(60, 2 ** attempt)
+            sleep_s = min(60, 2**attempt)
             time.sleep(sleep_s)
 
     return None
@@ -202,9 +205,8 @@ def _work_to_row(
 
 
 def dataset_to_csv(
-    n: int = 10,
-    topics_base_dir: str | Path = "out/topics",
-    output_csv: str | Path = "out/openalex/papers.csv",
+    topics_base_dir: str | Path = "../out/topics",
+    output_csv: str | Path = "../out/openalex/papers.csv",
     mailto: str = "tobias.schreieder@tu-dresden.de",
     sleep_seconds: float = 0.1,
     deduplicate_papers: bool = True,
@@ -214,130 +216,123 @@ def dataset_to_csv(
         out/openalex/papers.csv
 
     Workflow:
-    1. topics = select_openalex_topics(n=10)
-    2. For each topic:
-       - load out/topics/{topic_id}/topicgpt_labels.json
-       - choose the cluster with the highest score
-       - load out/topics/{topic_id}/representatives_top50.json
-       - take the 20 papers from that selected cluster
-       - fetch each paper from the OpenAlex API
-       - reconstruct the abstract from abstract_inverted_index
-       - flatten only the metadata fields used by the Dataset pipeline
-
-    Missing topic files are skipped safely.
+    1. Scan subdirectories in `topics_base_dir` as `topic_id`.
+    2. Load existing CSV if present to cache fetched paper metadata.
+    3. For each topic folder:
+       - Load `topicgpt_labels.json` for umbrella field and topic metadata.
+       - Load `final_verified_papers.json` for the list of verified papers.
+       - Fetch each paper from the OpenAlex API (or load from cache).
+       - Flatten metadata fields into CSV row format.
 
     Final CSV columns:
-        field
-        topic
-        id
-        title
-        abstract
-        year
-        type
-        citation_count
-        venue
-        institution
-        author
-        country
+        field, topic, id, title, abstract, year, type,
+        citation_count, venue, institution, author, country
     """
     topics_base_dir = Path(topics_base_dir)
     output_csv = Path(output_csv)
     output_csv.parent.mkdir(parents=True, exist_ok=True)
 
-    topics_by_field = select_openalex_topics(n=n)
+    # Load existing CSV if it exists to avoid re-fetching papers
+    existing_papers: dict[str, dict[str, Any]] = {}
+    if output_csv.exists():
+        print(f"Loading existing CSV from {output_csv} to avoid re-fetching papers...")
+        try:
+            existing_df = pd.read_csv(output_csv, dtype=str)
+            for _, r in existing_df.iterrows():
+                pid = _strip_openalex_id(r.get("id", ""))
+                if pid:
+                    existing_papers[pid] = r.to_dict()
+            print(f"Loaded {len(existing_papers)} existing papers from cache.")
+        except Exception as e:
+            print(f"Warning: Failed to load existing CSV ({e}). Will fetch all papers from API.")
 
+    if not topics_base_dir.exists():
+        print(f"Error: Base directory {topics_base_dir} does not exist.")
+        return output_csv
+
+    topic_dirs = sorted([d for d in topics_base_dir.iterdir() if d.is_dir()])
     rows: list[dict[str, Any]] = []
     seen_papers: set[str] = set()
 
-    for field, topic_list in topics_by_field.items():
-        for topic in topic_list:
-            topic_id = _strip_openalex_id(topic)
-            topic_dir = topics_base_dir / topic_id
+    for topic_dir in topic_dirs:
+        topic_id = topic_dir.name
+        reps_path = topic_dir / "final_verified_papers.json"
+        labels_path = topic_dir / "topicgpt_labels.json"
 
-            reps_path = topic_dir / "representatives_top50.json"
-            labels_path = topic_dir / "topicgpt_labels.json"
+        if not reps_path.exists():
+            print(f"Skipping {topic_id}: missing {reps_path}")
+            continue
 
-            if not reps_path.exists():
-                print(f"Skipping {topic_id}: missing {reps_path}")
+        if not labels_path.exists():
+            print(f"Skipping {topic_id}: missing {labels_path}")
+            continue
+
+        try:
+            reps = _load_json(reps_path)
+            labels = _load_json(labels_path)
+        except Exception as e:
+            print(f"Skipping {topic_id}: failed to load JSON files ({e})")
+            continue
+
+        # Extract 'field' (umbrella topic) and 'topic_name'
+        field = labels.get("umbrella_display_name", "") or topic_id
+
+        cluster_result = labels.get("cluster_result", {})
+        if isinstance(cluster_result, dict):
+            topic_name = cluster_result.get("topic_name", "")
+        else:
+            topic_name = ""
+
+        if not topic_name:
+            topic_name = reps.get("topic_name", "")
+
+        if not topic_name:
+            print(f"Skipping {topic_id}: missing topic_name in JSON files")
+            continue
+
+        papers = reps.get("papers", [])
+        if not isinstance(papers, list):
+            print(f"Skipping {topic_id}: 'papers' field is not a list in {reps_path}")
+            continue
+
+        print(f"Processing topic {topic_id} ({topic_name}) with {len(papers)} papers...")
+
+        for paper in papers:
+            if not isinstance(paper, dict):
                 continue
 
-            if not labels_path.exists():
-                print(f"Skipping {topic_id}: missing {labels_path}")
+            paper_id = _strip_openalex_id(paper.get("id", ""))
+            if not paper_id:
                 continue
 
-            try:
-                reps = _load_json(reps_path)
-                labels = _load_json(labels_path)
-            except Exception as e:
-                print(f"Skipping {topic_id}: failed to load JSON files ({e})")
+            if deduplicate_papers and paper_id in seen_papers:
+                continue
+            seen_papers.add(paper_id)
+
+            # Check if paper is already in existing CSV cache
+            if paper_id in existing_papers:
+                cached_row = existing_papers[paper_id].copy()
+                cached_row["field"] = field
+                cached_row["topic"] = topic_name
+                rows.append(cached_row)
                 continue
 
-            clusters = labels.get("clusters", {})
-            if not isinstance(clusters, dict) or not clusters:
-                print(f"Skipping {topic_id}: no clusters in {labels_path}")
+            work = _fetch_work_from_openalex(
+                paper_id=paper_id,
+                mailto=mailto,
+            )
+            if not work:
                 continue
 
-            try:
-                best_cluster_id, best_cluster = max(
-                    clusters.items(),
-                    key=lambda x: float((x[1] or {}).get("score", float("-inf"))),
-                )
-            except Exception as e:
-                print(f"Skipping {topic_id}: failed to determine best cluster ({e})")
-                continue
+            row = _work_to_row(
+                work=work,
+                field=field,
+                topic_name=topic_name,
+            )
+            rows.append(row)
 
-            if not isinstance(best_cluster, dict):
-                print(f"Skipping {topic_id}: invalid best cluster")
-                continue
-
-            topic_name = best_cluster.get("topic_name", "") or ""
-            if not topic_name:
-                print(f"Skipping {topic_id}: selected cluster has no topic_name")
-                continue
-
-            reps_clusters = reps.get("clusters", {})
-            if not isinstance(reps_clusters, dict):
-                print(f"Skipping {topic_id}: invalid clusters structure in {reps_path}")
-                continue
-
-            selected_cluster = reps_clusters.get(str(best_cluster_id))
-            if not isinstance(selected_cluster, dict):
-                print(f"Skipping {topic_id}: cluster {best_cluster_id} not found in {reps_path}")
-                continue
-
-            papers = selected_cluster.get("papers", [])
-            if not isinstance(papers, list):
-                print(f"Skipping {topic_id}: papers missing for cluster {best_cluster_id}")
-                continue
-
-            for paper in papers:
-                if not isinstance(paper, dict):
-                    continue
-
-                paper_id = _strip_openalex_id(paper.get("id", ""))
-                if not paper_id:
-                    continue
-
-                if deduplicate_papers and paper_id in seen_papers:
-                    continue
-                seen_papers.add(paper_id)
-
-                work = _fetch_work_from_openalex(
-                    paper_id=paper_id,
-                    mailto=mailto,
-                )
-                if not work:
-                    continue
-
-                row = _work_to_row(
-                    work=work,
-                    field=field,
-                    topic_name=topic_name,
-                )
-                rows.append(row)
-
-                if sleep_seconds > 0:
-                    time.sleep(sleep_seconds)
+            if sleep_seconds > 0:
+                time.sleep(sleep_seconds)
 
     fieldnames = [
         "field",
@@ -359,7 +354,7 @@ def dataset_to_csv(
         writer.writeheader()
         writer.writerows(rows)
 
-    print(f"Saved {len(rows)} papers to {output_csv}")
+    print(f"Successfully saved {len(rows)} papers to {output_csv}")
     return output_csv
 
 
@@ -367,7 +362,7 @@ def eda(
     input_csv: str | Path = "../out/openalex/papers.csv",
     null_summary_csv: str | Path = "../out/openalex/papers_null_summary.csv",
     plots_dir: str | Path = "../out/openalex/plots",
-    top_n_countries: int = 20
+    top_n_countries: int = 20,
 ) -> dict[str, Path]:
 
     input_csv = Path(input_csv)
@@ -392,7 +387,9 @@ def eda(
     # NULL proportion summary
     null_summary = pd.DataFrame({
         "column": df_clean.columns,
-        "null_proportion": [df_clean[col].isna().mean() for col in df_clean.columns],
+        "null_proportion": [
+            df_clean[col].isna().mean() for col in df_clean.columns
+        ],
     })
 
     null_summary.to_csv(null_summary_csv, index=False)
@@ -401,13 +398,14 @@ def eda(
     year_plot = plots_dir / "year_distribution.png"
 
     if "year" in df_clean.columns:
-        year_series = pd.to_numeric(df_clean["year"], errors="coerce").dropna().astype(int)
+        year_series = (
+            pd.to_numeric(df_clean["year"], errors="coerce").dropna().astype(int)
+        )
 
         if not year_series.empty:
             min_year = year_series.min()
             max_year = year_series.max()
 
-            # ensure ALL years exist (no gaps)
             counts = (
                 year_series.value_counts()
                 .sort_index()
@@ -417,13 +415,10 @@ def eda(
             plt.figure(figsize=(14, 6))
             ax = counts.plot(kind="bar")
 
-            # positions correspond to ALL years
             positions = range(len(counts))
 
-            # label only every 10th year
             labels = [
-                str(year) if year % 10 == 0 else ""
-                for year in counts.index
+                str(year) if year % 10 == 0 else "" for year in counts.index
             ]
 
             ax.set_xticks(list(positions))
@@ -460,29 +455,24 @@ def eda(
     citation_plot = plots_dir / "citation_count_distribution.png"
 
     if "citation_count" in df_clean.columns:
-        citation_series = pd.to_numeric(df_clean["citation_count"], errors="coerce").dropna()
+        citation_series = pd.to_numeric(
+            df_clean["citation_count"], errors="coerce"
+        ).dropna()
 
         if not citation_series.empty:
-            import numpy as np
-
             max_val = int(citation_series.max())
 
-            # bins of size 10
             bins = np.arange(0, max_val + 10, 10)
 
             plt.figure(figsize=(12, 6))
 
-            # get histogram values
             counts, edges, patches = plt.hist(citation_series, bins=bins)
 
-            # remove left gap → force axis start at 0
             plt.xlim(left=0)
 
-            # x-axis ticks every 200
             ticks = np.arange(0, max_val + 200, 200)
             plt.xticks(ticks, rotation=45)
 
-            # mark bar tops with "x"
             for count, patch in zip(counts, patches):
                 if count > 0:
                     x = patch.get_x() + patch.get_width() / 2
@@ -524,70 +514,10 @@ def eda(
             plt.savefig(country_plot, dpi=200)
             plt.close()
 
-    # -------- QUALITY CHECKS (language, duplicate, content match) --------
-    quality_plot = plots_dir / "quality_checks.png"
-    quality_summary_csv = null_summary_csv.parent / "papers_quality_check.csv"
-
-    if "title" in df_clean.columns and "abstract" in df_clean.columns:
-        ft_model = _get_fasttext_model()
-        st_model = _get_specter_model()
-
-        titles = df_clean["title"].fillna("").astype(str)
-        abstracts = df_clean["abstract"].fillna("").astype(str)
-
-        lang_pass: list[bool] = []
-        is_duplicate: list[bool] = []
-        content_pass: list[bool] = []
-        seen_hashes: set[str] = set()
-
-        for title, abstract in zip(titles, abstracts):
-            combined = f"{title}. {abstract}"
-            lang_pass.append(lang_detect(combined, ft_model))
-            is_duplicate.append(duplicate_detect(abstract, seen_hashes))
-            content_pass.append(content_detect(title, abstract, st_model))
-
-        quality_df = pd.DataFrame({
-            "id": df_clean["id"] if "id" in df_clean.columns else range(len(df_clean)),
-            "lang_pass": lang_pass,
-            "is_duplicate": is_duplicate,
-            "content_pass": content_pass,
-        })
-        quality_df["all_pass"] = (
-            quality_df["lang_pass"]
-            & ~quality_df["is_duplicate"]
-            & quality_df["content_pass"]
-        )
-        quality_df.to_csv(quality_summary_csv, index=False)
-
-        total = len(quality_df)
-        lang_pass_pct = quality_df["lang_pass"].mean() * 100 if total else 0.0
-        dup_pct = quality_df["is_duplicate"].mean() * 100 if total else 0.0
-        content_pass_pct = quality_df["content_pass"].mean() * 100 if total else 0.0
-        all_pass_pct = quality_df["all_pass"].mean() * 100 if total else 0.0
-
-        plt.figure(figsize=(10, 6))
-        labels = ["Language\n(English)", "Not Duplicate", "Content Match\n(title/abstract)", "All Checks\nPassed"]
-        values = [lang_pass_pct, 100 - dup_pct, content_pass_pct, all_pass_pct]
-        bars = plt.bar(labels, values)
-        for bar, val in zip(bars, values):
-            plt.text(bar.get_x() + bar.get_width() / 2, val + 1, f"{val:.1f}%", ha="center")
-        plt.ylabel("% of Papers Passing")
-        plt.ylim(0, 110)
-        plt.title(f"Rule-Based Quality Check Pass Rates (n={total})")
-        plt.tight_layout()
-        plt.savefig(quality_plot, dpi=200)
-        plt.close()
-
-        print(f"Quality check: {total} papers | English: {lang_pass_pct:.1f}% | "
-              f"Duplicates: {dup_pct:.1f}% | Content match: {content_pass_pct:.1f}% | "
-              f"All checks passed: {all_pass_pct:.1f}%")
-
     return {
         "null_summary_csv": null_summary_csv,
         "year_plot": year_plot,
         "type_plot": type_plot,
         "citation_plot": citation_plot,
         "country_plot": country_plot,
-        "quality_plot": quality_plot,
-        "quality_summary_csv": quality_summary_csv,
     }

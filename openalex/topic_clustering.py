@@ -215,7 +215,7 @@ def _cluster_scores_from_embeddings(emb: np.ndarray, labels: np.ndarray) -> tupl
     return coherence, distinctiveness, score
 
 
-def select_openalex_topics(n: int = 10, random_state: int = 42,min_works: int = 10000) -> dict[str, list[str]]:
+def select_openalex_topics(n: int = 10, random_state: int = 42,min_works: int = 8000) -> dict[str, list[str]]:
     """
     Select OpenAlex topic URLs stratified by OpenAlex field.
 
@@ -230,11 +230,11 @@ def select_openalex_topics(n: int = 10, random_state: int = 42,min_works: int = 
 
     :param n: Number of topics to sample per field (upper bound; fields with fewer topics return all).
     :param random_state: Random seed for deterministic sampling.
-    :param min_works: Topics need to exceeds at least 10000 works to be chosen
+    :param min_works: Topics need to exceeds at least 8000 works to be chosen
     :return: Dict mapping field_display_name -> list of topic ids (OpenAlex URLs).
     """
     out_dir = os.path.join("../data", "openalex")
-    out_path = os.path.join(out_dir, "selected_topics.json")
+    out_path = os.path.join(out_dir, "selected_topics.json")#data/openalex/selected_topics.json
 
     # -----------------------------
     # Fast path: load existing selection if parameters match
