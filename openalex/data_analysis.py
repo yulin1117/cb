@@ -68,6 +68,16 @@ def _extract_venue(work: dict[str, Any]) -> str:
     return ""
 
 
+def _extract_venue_type(work: dict[str, Any]) -> str:
+    primary_location = work.get("primary_location") or {}
+    if not isinstance(primary_location, dict):
+        return ""
+    source = primary_location.get("source") or {}
+    if isinstance(source, dict):
+        return str(source.get("type") or "").strip()
+    return ""
+
+
 def _extract_authors(work: dict[str, Any]) -> str:
     authorships = work.get("authorships") or []
     authors = []
@@ -188,19 +198,70 @@ def _work_to_row(
 ) -> dict[str, Any]:
     work_id = _strip_openalex_id(work.get("id", ""))
 
+    # 1. DERIVED STRUCTURAL 計算
+    authorships = work.get("authorships") or []
+    author_count = len(authorships) if isinstance(authorships, list) else 0
+
+    inst_count = work.get("institutions_distinct_count")
+    if inst_count is None:
+        unique_insts = set()
+        for a in authorships:
+            if isinstance(a, dict):
+                for inst in a.get("institutions") or []:
+                    if isinstance(inst, dict) and inst.get("display_name"):
+                        unique_insts.add(inst.get("display_name"))
+        inst_count = len(unique_insts)
+
+    cntry_count = work.get("countries_distinct_count")
+    if cntry_count is None:
+        unique_countries = set()
+        for a in authorships:
+            if isinstance(a, dict):
+                for c in a.get("countries") or []:
+                    if c:
+                        unique_countries.add(str(c))
+        cntry_count = len(unique_countries)
+
+    # 2. IMPACT 欄位解析
+    citation_percentile = ""
+    pct_obj = work.get("citation_normalized_percentile")
+    if isinstance(pct_obj, dict):
+        pct_val = pct_obj.get("value")
+        if pct_val is not None:
+            citation_percentile = str(pct_val)
+
+    # 3. DESCRIPTIVE (Open Access Status)
+    oa_status = ""
+    oa_obj = work.get("open_access")
+    if isinstance(oa_obj, dict):
+        oa_status = str(oa_obj.get("oa_status") or "")
+
     return {
+        # Context
         "field": field,
         "topic": topic_name,
+        # Paper ID
         "id": work_id,
-        "title": work.get("title", "") or "",
-        "abstract": work.get("abstract", "") or "",
-        "year": work.get("publication_year", "") or "",
-        "type": work.get("type", "") or "",
-        "citation_count": work.get("cited_by_count", "") or "",
+        # CONTENT
+        "title": str(work.get("title") or "").strip(),
+        "abstract": str(work.get("abstract") or "").strip(),
+        # BIBLIOGRAPHIC
+        "authors": _extract_authors(work),
+        "publication_year": work.get("publication_year", "") or "",
         "venue": _extract_venue(work),
-        "institution": _extract_institutions(work),
-        "author": _extract_authors(work),
-        "country": _extract_countries(work),
+        # DESCRIPTIVE
+        "paper_type": str(work.get("type") or "").strip(),
+        "venue_type": _extract_venue_type(work),
+        "institutions": _extract_institutions(work),
+        "countries": _extract_countries(work),
+        "open_access_status": oa_status,
+        # DERIVED STRUCTURAL
+        "author_count": author_count,
+        "institution_count": inst_count,
+        "country_count": cntry_count,
+        # IMPACT
+        "citation_count": work.get("cited_by_count", "") if work.get("cited_by_count") is not None else "",
+        "citation_percentile": citation_percentile,
     }
 
 
@@ -222,15 +283,32 @@ def dataset_to_csv(
        - Load `topicgpt_labels.json` for umbrella field and topic metadata.
        - Load `final_verified_papers.json` for the list of verified papers.
        - Fetch each paper from the OpenAlex API (or load from cache).
-       - Flatten metadata fields into CSV row format.
-
-    Final CSV columns:
-        field, topic, id, title, abstract, year, type,
-        citation_count, venue, institution, author, country
+       - Flatten metadata fields into CSV row format conforming to Tobias's schema.
     """
     topics_base_dir = Path(topics_base_dir)
     output_csv = Path(output_csv)
     output_csv.parent.mkdir(parents=True, exist_ok=True)
+
+    fieldnames = [
+        "field",
+        "topic",
+        "id",
+        "title",
+        "abstract",
+        "authors",
+        "publication_year",
+        "venue",
+        "paper_type",
+        "venue_type",
+        "institutions",
+        "countries",
+        "open_access_status",
+        "author_count",
+        "institution_count",
+        "country_count",
+        "citation_count",
+        "citation_percentile",
+    ]
 
     # Load existing CSV if it exists to avoid re-fetching papers
     existing_papers: dict[str, dict[str, Any]] = {}
@@ -314,6 +392,10 @@ def dataset_to_csv(
                 cached_row = existing_papers[paper_id].copy()
                 cached_row["field"] = field
                 cached_row["topic"] = topic_name
+                # Ensure all target keys exist
+                for key in fieldnames:
+                    if key not in cached_row:
+                        cached_row[key] = ""
                 rows.append(cached_row)
                 continue
 
@@ -333,21 +415,6 @@ def dataset_to_csv(
 
             if sleep_seconds > 0:
                 time.sleep(sleep_seconds)
-
-    fieldnames = [
-        "field",
-        "topic",
-        "id",
-        "title",
-        "abstract",
-        "year",
-        "type",
-        "citation_count",
-        "venue",
-        "institution",
-        "author",
-        "country",
-    ]
 
     with output_csv.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -396,10 +463,11 @@ def eda(
 
     # -------- YEAR PLOT --------
     year_plot = plots_dir / "year_distribution.png"
+    year_col = "publication_year" if "publication_year" in df_clean.columns else "year"
 
-    if "year" in df_clean.columns:
+    if year_col in df_clean.columns:
         year_series = (
-            pd.to_numeric(df_clean["year"], errors="coerce").dropna().astype(int)
+            pd.to_numeric(df_clean[year_col], errors="coerce").dropna().astype(int)
         )
 
         if not year_series.empty:
@@ -433,9 +501,10 @@ def eda(
 
     # -------- TYPE PLOT --------
     type_plot = plots_dir / "type_distribution.png"
+    type_col = "paper_type" if "paper_type" in df_clean.columns else "type"
 
-    if "type" in df_clean.columns:
-        type_series = df_clean["type"].dropna().astype(str).str.strip()
+    if type_col in df_clean.columns:
+        type_series = df_clean[type_col].dropna().astype(str).str.strip()
         type_series = type_series[type_series != ""]
 
         if not type_series.empty:
@@ -488,10 +557,11 @@ def eda(
 
     # -------- COUNTRY PLOT --------
     country_plot = plots_dir / "country_distribution.png"
+    country_col = "countries" if "countries" in df_clean.columns else "country"
 
-    if "country" in df_clean.columns:
+    if country_col in df_clean.columns:
         countries = (
-            df_clean["country"]
+            df_clean[country_col]
             .dropna()
             .astype(str)
             .str.split("|", regex=False)
